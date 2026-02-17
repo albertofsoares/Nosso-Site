@@ -61,7 +61,6 @@
 
     <script type="text/babel" data-type="module">
         // --- IMPORTS ---
-        // Usando versões ESM específicas para estabilidade máxima
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { 
             getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
@@ -72,7 +71,6 @@
             setDoc, deleteDoc, updateDoc, serverTimestamp, query, where, increment, orderBy, limit 
         } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         
-        // Importando ícones como componentes React (CRÍTICO para corrigir o bug da tela azul)
         import { 
             Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, 
             Trophy, Bold, Italic, Code, List 
@@ -91,7 +89,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- ERROR BOUNDARY (Proteção contra tela branca/azul) ---
+        // --- ERROR BOUNDARY ---
         class ErrorBoundary extends React.Component {
             constructor(props) {
                 super(props);
@@ -108,11 +106,8 @@
                     return (
                         <div className="min-h-screen flex items-center justify-center bg-slate-900 text-red-400 p-8 text-center">
                             <div>
-                                <h1 className="text-2xl font-bold mb-2">Erro de Processamento (Kernel Panic)</h1>
+                                <h1 className="text-2xl font-bold mb-2">Erro de Processamento</h1>
                                 <p className="mb-4">Ocorreu um erro ao renderizar a interface.</p>
-                                <pre className="bg-slate-800 p-4 rounded text-left text-xs overflow-auto max-w-lg mx-auto mb-4 border border-red-900">
-                                    {this.state.error && this.state.error.toString()}
-                                </pre>
                                 <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-6 py-2 rounded font-bold hover:bg-red-500">Reiniciar Sistema</button>
                             </div>
                         </div>
@@ -227,7 +222,6 @@
                     setCards(loadedCards);
                 } catch (error) {
                     console.error("Erro cards:", error);
-                    // Fallback para evitar crash se DB inacessível
                     setCards([]); 
                 }
             };
@@ -273,7 +267,6 @@
                         const review = reviews[card.id];
                         if (!review) return true; // Novo
                         
-                        // Parse de data seguro
                         let dueDate;
                         if (review.dueDate && typeof review.dueDate.toDate === 'function') {
                             dueDate = review.dueDate.toDate();
@@ -496,7 +489,7 @@
                                     </tr>
                                 ))}
                                 {leaders.length === 0 && !loading && (
-                                    <tr><td colSpan="4" className="p-12 text-center text-slate-500">Ainda sem dados.</td></tr>
+                                    <tr><td colSpan="4" className="p-12 text-center text-slate-500">Ainda sem dados. Complete um deck para aparecer aqui!</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -533,18 +526,27 @@
                     setReviews(newReviews);
                     
                     try {
+                        // 1. Salva o review do card
                         await setDoc(doc(db, `users/${user.uid}/reviews/${card.id}`), {
                             ...result,
                             lastReviewed: serverTimestamp()
                         });
 
+                        // 2. Calcula as estatísticas em tempo real usando os dados da memória (newReviews)
+                        const totalCards = Object.keys(newReviews).length;
+                        const graduatedCards = Object.values(newReviews).filter(r => r.state === 'graduated').length;
+                        const retention = totalCards === 0 ? 0 : (graduatedCards / totalCards) * 100;
+
+                        // 3. Atualiza o Ranking com os dados calculados
                         const statsRef = doc(db, 'leaderboard', user.uid);
                         await setDoc(statsRef, {
                             email: user.email,
-                            total: increment(1),
+                            total: totalCards, // XP baseado em cards únicos estudados
+                            retention: retention, // Taxa real calculada
                             lastActive: serverTimestamp()
                         }, { merge: true });
-                    } catch(e) { console.error(e); }
+
+                    } catch(e) { console.error("Erro ao salvar progresso:", e); }
                 }
                 
                 setIsFlipped(false);
