@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anki Pro - Digital</title>
-    
-    <!-- Tailwind CSS (Estilização) -->
+    <title>AnkiPro Digital - CS Student Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Babel (Para entender JSX no navegador) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Import Map: Define onde buscar as bibliotecas -->
+    
+    <!-- Configuração de Ícones e Fontes -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
     <script type="importmap">
     {
       "imports": {
@@ -26,72 +24,35 @@
     </script>
 
     <style>
-        /* Animações Personalizadas */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        .perspective-1000 {
-            perspective: 1000px;
-        }
-        .transform-style-3d {
-            transform-style: preserve-3d;
-        }
-        .backface-hidden {
-            backface-visibility: hidden;
-        }
-        .rotate-y-180 {
-            transform: rotateY(180deg);
-        }
-        body {
-            background-color: #0f172a; /* slate-900 */
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .card-flip { transition: transform 0.6s; transform-style: preserve-3d; }
+        .card-flip.flipped { transform: rotateY(180deg); }
+        .card-face { backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .card-back { transform: rotateY(180deg); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100">
+<body>
     <div id="root"></div>
 
-    <!-- Aplicação React -->
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
         import { initializeApp } from "firebase/app";
         import { 
-            getAuth, 
-            signInWithEmailAndPassword,
-            createUserWithEmailAndPassword, 
-            signOut, 
-            onAuthStateChanged 
+            getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
+            signOut, onAuthStateChanged 
         } from "firebase/auth";
         import { 
-            getFirestore, 
-            collection, 
-            addDoc, 
-            getDocs, 
-            doc, 
-            updateDoc, 
-            deleteDoc, 
-            setDoc, 
-            serverTimestamp 
+            getFirestore, collection, addDoc, getDocs, doc, 
+            updateDoc, deleteDoc, setDoc, serverTimestamp 
         } from "firebase/firestore";
         import { 
-            Brain, 
-            LogOut, 
-            Trash2, 
-            Edit2, 
-            Save, 
-            X, 
-            Layout, 
-            RotateCw,
-            Lock,
-            UserPlus,
-            LogIn
+            Brain, LogIn, LogOut, UserPlus, Save, Trash2, 
+            Edit3, Lock, X, RotateCw, CheckCircle, GraduationCap
         } from 'lucide-react';
 
-        // --- CONFIGURAÇÃO FIREBASE ---
+        // --- 1. CONFIGURAÇÃO E CONSTANTES ---
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
             authDomain: "ankidigital.firebaseapp.com",
@@ -104,592 +65,462 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        
+        // Caminhos Absolutos para Evitar Erros de Permissão
+        const APP_ID = "ankidigital"; 
+        const PUBLIC_PATH = `artifacts/${APP_ID}/public/data/cards`;
+        
+        const getProgressPath = (uid) => `artifacts/${APP_ID}/users/${uid}/progress`;
 
-        // ID do App para estrutura de caminhos (Evita erros de permissão)
-        const APP_ID = 'ankidigital';
-
-        // --- UTILITÁRIOS ---
-
-        const calculateNextReview = (rating, previousInterval, previousEase) => {
-            let newInterval;
-            let newEase = previousEase || 2.5;
-
+        // --- 2. LÓGICA DO ALGORITMO ANKI (SM-2) ---
+        const calculateSM2 = (rating, prevInterval, prevEase) => {
+            // Rating: 0=Errei, 1=Difícil, 2=Bom, 3=Fácil
+            let newInterval, newEase;
+            
             if (rating === 0) {
-                newInterval = 1; 
-                newEase = Math.max(1.3, newEase - 0.2);
+                newInterval = 1; // Reseta para amanhã
+                newEase = Math.max(1.3, prevEase - 0.2);
             } else {
-                if (previousInterval === 0) {
-                    newInterval = 1;
-                } else if (previousInterval === 1) {
-                    newInterval = 3;
-                } else {
-                    newInterval = Math.round(previousInterval * newEase);
-                }
-                if (rating === 1) newEase -= 0.15;
-                if (rating === 3) newEase += 0.15;
+                if (prevInterval === 0) newInterval = 1;
+                else if (prevInterval === 1) newInterval = 3;
+                else newInterval = Math.round(prevInterval * prevEase);
+                
+                // Ajuste fino do fator de facilidade
+                if (rating === 1) newEase = prevEase - 0.15;
+                else if (rating === 3) newEase = prevEase + 0.15;
+                else newEase = prevEase;
             }
 
+            // Garante mínimo de facilidade
+            newEase = Math.max(1.3, newEase);
+            
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + newInterval);
             
             return { interval: newInterval, ease: newEase, dueDate };
         };
 
-        // --- COMPONENTES UI ---
+        // --- 3. COMPONENTES ---
 
-        const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }) => {
-            const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
-            const variants = {
-                primary: "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30",
-                secondary: "bg-slate-700 hover:bg-slate-600 text-slate-200",
-                danger: "bg-red-500 hover:bg-red-600 text-white",
-                ghost: "bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white"
-            };
-            return (
-                <button 
-                onClick={onClick} 
-                disabled={disabled}
-                className={`${baseStyle} ${variants[variant]} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
-                >
-                {children}
-                </button>
-            );
+        // Componente de Feedback/Loading
+        const StatusMessage = ({ loading, error }) => {
+            if (loading) return <div className="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center"><RotateCw className="animate-spin text-blue-500 w-10 h-10"/></div>;
+            if (error) return <div className="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded mb-4 text-sm">{error}</div>;
+            return null;
         };
 
-        const Input = ({ ...props }) => (
-            <input 
-                {...props} 
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-slate-500"
-            />
-        );
-
-        const CardInput = ({ label, value, onChange, placeholder, isTextarea = false }) => (
-            <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-400 mb-1">{label}</label>
-                {isTextarea ? (
-                <textarea 
-                    value={value} 
-                    onChange={onChange} 
-                    placeholder={placeholder}
-                    rows={3}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-slate-500 resize-none"
-                />
-                ) : (
-                <Input value={value} onChange={onChange} placeholder={placeholder} />
-                )}
-            </div>
-        );
-
-        // --- APP PRINCIPAL ---
-
         function App() {
+            // Estados Globais
             const [user, setUser] = useState(null);
             const [isAdmin, setIsAdmin] = useState(false);
-            const [view, setView] = useState('loading');
+            const [view, setView] = useState('loading'); // loading, login, dashboard, study, admin
+            
+            // Dados
             const [cards, setCards] = useState([]);
             const [studyQueue, setStudyQueue] = useState([]);
-            const [currentCardIndex, setCurrentCardIndex] = useState(0);
-            const [isFlipped, setIsFlipped] = useState(false);
             const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
 
-            // Auth State
+            // Estados de Estudo
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [isFlipped, setIsFlipped] = useState(false);
+
+            // Estados de Form (Login/Admin)
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [error, setError] = useState('');
-            const [isRegistering, setIsRegistering] = useState(false); // Novo estado para alternar telas
-
-            // Admin State
-            const [newCard, setNewCard] = useState({ front: '', back: '', deck: 'Geral' });
+            const [isRegister, setIsRegister] = useState(false);
+            const [newCard, setNewCard] = useState({ front: '', back: '', deck: 'Computação' });
             const [editingId, setEditingId] = useState(null);
 
+            // --- 4. EFEITOS E AUTH ---
             useEffect(() => {
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
                     if (currentUser) {
-                        const adminCheck = currentUser.email?.endsWith('@userpro.com') || false;
+                        const adminCheck = currentUser.email?.endsWith('@userpro.com');
                         setIsAdmin(adminCheck);
                         setView('dashboard');
-                        fetchCards(currentUser.uid);
+                        fetchData(currentUser.uid);
                     } else {
                         setIsAdmin(false);
                         setView('login');
-                        fetchCards(null);
+                        fetchData(null); // Busca apenas cards para visitante
                     }
-                    setLoading(false);
                 });
                 return () => unsubscribe();
             }, []);
 
-            // --- ACESSO AO BANCO DE DADOS (Caminhos Corrigidos) ---
-
-            const fetchCards = async (userId) => {
+            // --- 5. DATA FETCHING (CRÍTICO) ---
+            const fetchData = async (uid) => {
                 setLoading(true);
+                setError('');
                 try {
-                    // 1. Buscar Deck Geral (Caminho Público)
-                    const cardsCollection = collection(db, 'artifacts', APP_ID, 'public', 'data', 'cards');
-                    const querySnapshot = await getDocs(cardsCollection);
-                    const rawCards = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    let finalCards = rawCards;
+                    // 1. Buscar Cards Públicos
+                    const cardsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'cards');
+                    const snapshot = await getDocs(cardsRef);
+                    const loadedCards = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                    // 2. Se logado, buscar progresso (Caminho Privado)
-                    if (userId) {
-                        const progressCollection = collection(db, 'artifacts', APP_ID, 'users', userId, 'progress');
-                        const progressSnap = await getDocs(progressCollection);
+                    // 2. Se logado, buscar progresso
+                    let mergedCards = loadedCards;
+                    if (uid) {
+                        const progressRef = collection(db, 'artifacts', APP_ID, 'users', uid, 'progress');
+                        const progSnap = await getDocs(progressRef);
                         const progressMap = {};
-                        progressSnap.docs.forEach(doc => {
-                            progressMap[doc.id] = doc.data();
-                        });
+                        progSnap.docs.forEach(doc => progressMap[doc.id] = doc.data());
 
-                        finalCards = rawCards.map(card => {
-                            const progress = progressMap[card.id];
-                            return {
-                                ...card,
-                                progress: progress || { interval: 0, ease: 2.5, dueDate: null }
-                            };
-                        });
-                    }
-
-                    setCards(finalCards);
-                } catch (err) {
-                    console.error("Erro detalhado:", err);
-                    if (err.code === 'permission-denied') {
-                        setError("Acesso negado. Verifique as regras do banco de dados.");
+                        mergedCards = loadedCards.map(c => ({
+                            ...c,
+                            userData: progressMap[c.id] || { interval: 0, ease: 2.5, dueDate: null }
+                        }));
                     } else {
-                        setError("Falha ao carregar dados.");
+                        // Visitante: sem dados de progresso
+                        mergedCards = loadedCards.map(c => ({
+                            ...c,
+                            userData: { interval: 0, ease: 2.5, dueDate: null }
+                        }));
                     }
-                } finally {
+
+                    setCards(mergedCards);
+                    setLoading(false);
+                } catch (err) {
+                    console.error("Erro Fatal:", err);
+                    setError("Erro ao carregar banco de dados. Verifique sua conexão.");
                     setLoading(false);
                 }
             };
 
+            // --- 6. FUNÇÕES DE ADMIN (CRUD) ---
             const handleSaveCard = async () => {
-                if (!newCard.front || !newCard.back) return;
-                
-                try {
-                    const cardsCollection = collection(db, 'artifacts', APP_ID, 'public', 'data', 'cards');
+                if (!isAdmin) return;
+                if (!newCard.front || !newCard.back) {
+                    alert("Preencha frente e verso");
+                    return;
+                }
 
+                setLoading(true);
+                try {
+                    const cardsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'cards');
+                    
                     if (editingId) {
-                        const cardRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'cards', editingId);
-                        await updateDoc(cardRef, {
+                        // Update
+                        await updateDoc(doc(cardsRef, editingId), {
                             front: newCard.front,
                             back: newCard.back,
                             deck: newCard.deck,
                             updatedAt: serverTimestamp()
                         });
-                        setEditingId(null);
                     } else {
-                        await addDoc(cardsCollection, {
+                        // Create
+                        await addDoc(cardsRef, {
                             ...newCard,
                             createdAt: serverTimestamp()
                         });
                     }
                     
-                    setNewCard({ front: '', back: '', deck: 'Geral' });
-                    fetchCards(user?.uid);
-                    alert(editingId ? "Card atualizado!" : "Card criado com sucesso!");
+                    setNewCard({ front: '', back: '', deck: 'Computação' });
+                    setEditingId(null);
+                    await fetchData(user.uid); // Recarrega tudo
+                    alert("Salvo com sucesso!");
                 } catch (err) {
-                    alert("Erro ao salvar: " + err.message);
+                    setError("Erro ao salvar card: " + err.message);
+                } finally {
+                    setLoading(false);
                 }
             };
 
-            const handleDeleteCard = async (id) => {
-                if (!window.confirm("Tem certeza que deseja excluir este card?")) return;
+            const handleDelete = async (id) => {
+                if (!confirm("Excluir permanentemente?")) return;
+                setLoading(true);
                 try {
-                    const cardRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'cards', id);
-                    await deleteDoc(cardRef);
-                    fetchCards(user?.uid);
+                    await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'cards', id));
+                    await fetchData(user.uid);
                 } catch (err) {
-                    alert("Erro ao excluir: " + err.message);
+                    setError("Erro ao deletar: " + err.message);
+                } finally {
+                    setLoading(false);
                 }
             };
 
-            const handleRateCard = async (rating) => {
-                if (!user) {
-                    nextCard();
-                    return;
-                }
-
-                const currentCard = studyQueue[currentCardIndex];
-                const prevInterval = currentCard.progress?.interval || 0;
-                const prevEase = currentCard.progress?.ease || 2.5;
-
-                const { interval, ease, dueDate } = calculateNextReview(rating, prevInterval, prevEase);
-
-                try {
-                    const progressRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'progress', currentCard.id);
-                    await setDoc(progressRef, {
-                        cardId: currentCard.id,
-                        interval,
-                        ease,
-                        dueDate: dueDate,
-                        lastReviewed: serverTimestamp()
-                    });
-                    
-                    nextCard();
-                } catch (err) {
-                    console.error("Erro ao salvar progresso:", err);
-                }
-            };
-
-            // --- HANDLERS DE AUTH ---
-
-            const handleAuthSubmit = async (e) => {
-                e.preventDefault();
-                setError('');
-                try {
-                    if (isRegistering) {
-                        await createUserWithEmailAndPassword(auth, email, password);
-                        // Registro faz login automático, o useEffect cuida do resto
-                    } else {
-                        await signInWithEmailAndPassword(auth, email, password);
-                    }
-                } catch (err) {
-                    console.error(err);
-                    if (err.code === 'auth/email-already-in-use') {
-                        setError("Este email já está cadastrado.");
-                    } else if (err.code === 'auth/weak-password') {
-                        setError("A senha deve ter pelo menos 6 caracteres.");
-                    } else if (err.code === 'auth/invalid-credential') {
-                        setError("Email ou senha incorretos.");
-                    } else {
-                        setError("Erro na autenticação: " + err.message);
-                    }
-                }
-            };
-
-            const handleLogout = async () => {
-                await signOut(auth);
-                setEmail('');
-                setPassword('');
-            };
-
+            // --- 7. LÓGICA DE ESTUDO ---
             const startSession = () => {
                 const now = new Date();
                 let queue = [];
-                
+
                 if (user) {
-                    queue = cards.filter(card => {
-                        if (!card.progress || !card.progress.dueDate) return true;
-                        return new Date(card.progress.dueDate.seconds * 1000) <= now;
+                    // Lógica para Estudante (Baseado em datas)
+                    queue = cards.filter(c => {
+                        // Se não tem dueDate (novo) ou dueDate já passou
+                        if (!c.userData?.dueDate) return true;
+                        return c.userData.dueDate.seconds * 1000 <= now.getTime();
                     });
                 } else {
+                    // Lógica para Visitante (Embaralhar tudo)
                     queue = [...cards].sort(() => Math.random() - 0.5);
                 }
 
                 if (queue.length === 0) {
-                    alert("Nenhum card para revisar agora! Bom trabalho.");
+                    alert("Tudo em dia! Nenhum card para revisar agora.");
                     return;
                 }
 
                 setStudyQueue(queue);
-                setCurrentCardIndex(0);
+                setCurrentIndex(0);
                 setIsFlipped(false);
                 setView('study');
             };
 
-            const nextCard = () => {
-                if (currentCardIndex + 1 < studyQueue.length) {
-                    setIsFlipped(false);
-                    setTimeout(() => setCurrentCardIndex(curr => curr + 1), 150);
-                } else {
-                    alert("Sessão concluída!");
+            const handleRate = async (rating) => {
+                // Animar saída
+                if (currentIndex >= studyQueue.length - 1) {
+                    alert("Sessão Finalizada!");
                     setView('dashboard');
-                    fetchCards(user?.uid);
+                    return;
+                }
+
+                // Se logado, salvar progresso
+                if (user) {
+                    const card = studyQueue[currentIndex];
+                    const { interval, ease, dueDate } = calculateSM2(
+                        rating, 
+                        card.userData.interval, 
+                        card.userData.ease
+                    );
+
+                    // Optimistic UI update (não espera o banco pra passar pro proximo)
+                    // Mas dispara o save em background
+                    try {
+                        const progRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'progress', card.id);
+                        setDoc(progRef, {
+                            interval, ease, dueDate, lastReviewed: serverTimestamp()
+                        }); // Sem await para fluidez, ou com await se quiser garantir
+                    } catch (e) {
+                        console.error("Erro silencioso ao salvar progresso", e);
+                    }
+                }
+
+                setIsFlipped(false);
+                setTimeout(() => setCurrentIndex(prev => prev + 1), 150);
+            };
+
+            // --- 8. AUTH ACTIONS ---
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                    if (isRegister) {
+                        await createUserWithEmailAndPassword(auth, email, password);
+                    } else {
+                        await signInWithEmailAndPassword(auth, email, password);
+                    }
+                } catch (err) {
+                    let msg = "Erro desconhecido";
+                    if (err.code === 'auth/invalid-credential') msg = "Dados incorretos.";
+                    if (err.code === 'auth/email-already-in-use') msg = "Email já em uso.";
+                    if (err.code === 'auth/weak-password') msg = "Senha fraca (mín 6 dígitos).";
+                    setError(msg);
+                    setLoading(false);
                 }
             };
 
             // --- RENDERIZAÇÃO ---
-
-            if (loading) {
-                return (
-                    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400">
-                        <RotateCw className="w-8 h-8 animate-spin" />
-                        <span className="ml-3 font-mono">Carregando sistema...</span>
-                    </div>
-                );
-            }
+            if (view === 'loading') return <StatusMessage loading={true} />;
 
             return (
-                <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
-                
-                {/* NAVBAR */}
-                <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
-                    <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-blue-400">
-                        <Brain className="w-6 h-6" />
-                        <span className="font-bold text-lg tracking-tight">Anki<span className="text-white">Pro</span></span>
-                    </div>
+                <div className="min-h-screen flex flex-col">
+                    <StatusMessage loading={loading} />
                     
-                    <div className="flex items-center gap-4">
-                        {user ? (
-                        <>
-                            {isAdmin && (
-                            <button 
-                                onClick={() => setView('admin')}
-                                className="text-sm font-medium text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                            >
-                                <Lock className="w-3 h-3" /> Painel Admin
-                            </button>
+                    {/* NAVBAR */}
+                    <nav className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+                        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-blue-500 font-bold text-xl">
+                                <Brain /> <span>Anki<span className="text-white">Pro</span></span>
+                            </div>
+                            {user ? (
+                                <div className="flex gap-4 items-center text-sm">
+                                    <span className="hidden sm:inline text-slate-400">{user.email}</span>
+                                    {isAdmin && (
+                                        <button onClick={() => setView('admin')} className="text-amber-400 hover:text-amber-300 flex items-center gap-1">
+                                            <Lock size={16}/> Admin
+                                        </button>
+                                    )}
+                                    <button onClick={() => setView('dashboard')} className="text-slate-300 hover:text-white">Dashboard</button>
+                                    <button onClick={() => signOut(auth)} className="text-red-400 hover:text-red-300"><LogOut size={18}/></button>
+                                </div>
+                            ) : (
+                                view !== 'login' && <button onClick={() => setView('login')} className="text-blue-400 font-medium">Login</button>
                             )}
-                            <button 
-                            onClick={() => setView('dashboard')}
-                            className="text-sm font-medium text-slate-400 hover:text-white"
-                            >
-                            Estudar
-                            </button>
-                            <div className="h-4 w-px bg-slate-700"></div>
-                            <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors">
-                            <LogOut className="w-5 h-5" />
-                            </button>
-                        </>
-                        ) : (
-                        <button 
-                            onClick={() => setView('login')}
-                            className="text-sm font-medium text-blue-400 hover:text-blue-300"
-                        >
-                            Login / Cadastro
-                        </button>
-                        )}
-                    </div>
-                    </div>
-                </nav>
-
-                <main className="max-w-3xl mx-auto px-4 py-8">
-                    
-                    {/* LOGIN VIEW */}
-                    {view === 'login' && (
-                    <div className="max-w-md mx-auto mt-12 bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 animate-fade-in">
-                        <h2 className="text-2xl font-bold text-white mb-2">
-                            {isRegistering ? 'Criar Nova Conta' : 'Acesso ao Sistema'}
-                        </h2>
-                        <p className="text-slate-400 mb-6 text-sm">
-                            {isRegistering 
-                             ? 'Crie sua conta para salvar seu progresso nos estudos.' 
-                             : 'Faça login para sincronizar seu progresso.'}
-                        </p>
-                        
-                        <form onSubmit={handleAuthSubmit} className="space-y-4">
-                            <Input 
-                                type="email" 
-                                placeholder="Seu email" 
-                                value={email} 
-                                onChange={e => setEmail(e.target.value)}
-                                required 
-                            />
-                            <Input 
-                                type="password" 
-                                placeholder="Senha (mín. 6 caracteres)" 
-                                value={password} 
-                                onChange={e => setPassword(e.target.value)}
-                                required 
-                            />
-                            {error && <p className="text-red-400 text-sm bg-red-900/20 p-2 rounded border border-red-900/50">{error}</p>}
-                            
-                            <Button type="submit" className="w-full">
-                                {isRegistering ? (
-                                    <><UserPlus className="w-4 h-4" /> Criar Conta</>
-                                ) : (
-                                    <><LogIn className="w-4 h-4" /> Entrar</>
-                                )}
-                            </Button>
-                        </form>
-
-                        <div className="mt-4 text-center">
-                            <button 
-                                onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
-                                className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
-                            >
-                                {isRegistering 
-                                 ? 'Já tem uma conta? Clique para entrar.' 
-                                 : 'Não tem conta? Crie uma agora.'}
-                            </button>
                         </div>
+                    </nav>
 
-                        <div className="mt-6 pt-6 border-t border-slate-700 text-center">
-                            <p className="text-slate-500 mb-3 text-sm">Apenas quer praticar?</p>
-                            <Button variant="secondary" className="w-full" onClick={startSession}>
-                                Modo Visitante (Sem Salvar)
-                            </Button>
-                        </div>
-                    </div>
-                    )}
+                    {/* CONTENT */}
+                    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
+                        {error && <StatusMessage error={error} />}
 
-                    {/* DASHBOARD VIEW */}
-                    {view === 'dashboard' && (
-                    <div className="animate-fade-in">
-                        <header className="mb-8">
-                        <h1 className="text-3xl font-bold text-white">Olá, {user ? user.email.split('@')[0] : 'Visitante'}</h1>
-                        <p className="text-slate-400 mt-1">Você tem <strong className="text-blue-400">{cards.length}</strong> cartões disponíveis no total.</p>
-                        </header>
-
-                        <div className="grid gap-6 md:grid-cols-2">
-                        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 shadow-lg shadow-blue-900/20 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform cursor-pointer" onClick={startSession}>
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Brain size={120} />
-                            </div>
-                            <h3 className="text-xl font-bold mb-2">Revisão Inteligente</h3>
-                            <p className="text-blue-100 text-sm mb-6">O algoritmo calculou os itens que você está prestes a esquecer.</p>
-                            <Button variant="secondary" className="bg-white/10 hover:bg-white/20 border border-white/20">
-                            Começar Agora
-                            </Button>
-                        </div>
-
-                        {isAdmin && (
-                            <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer group" onClick={() => setView('admin')}>
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-xl font-bold text-white">Gerenciar Deck</h3>
-                                <Layout className="text-slate-500 group-hover:text-blue-400" />
-                            </div>
-                            <p className="text-slate-400 text-sm">Adicione, edite ou remova flashcards do banco de dados global.</p>
+                        {/* LOGIN SCREEN */}
+                        {view === 'login' && (
+                            <div className="max-w-md mx-auto mt-10 bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700">
+                                <h1 className="text-2xl font-bold mb-2 text-white">{isRegister ? "Criar Conta" : "Login"}</h1>
+                                <p className="text-slate-400 text-sm mb-6">Salve seu progresso e estude de forma eficiente.</p>
+                                
+                                <form onSubmit={handleAuth} className="space-y-4">
+                                    <input 
+                                        type="email" placeholder="Email" required 
+                                        className="w-full bg-slate-900 border border-slate-700 p-3 rounded text-white"
+                                        value={email} onChange={e => setEmail(e.target.value)}
+                                    />
+                                    <input 
+                                        type="password" placeholder="Senha" required 
+                                        className="w-full bg-slate-900 border border-slate-700 p-3 rounded text-white"
+                                        value={password} onChange={e => setPassword(e.target.value)}
+                                    />
+                                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded font-bold transition-colors">
+                                        {isRegister ? "Cadastrar" : "Entrar"}
+                                    </button>
+                                </form>
+                                
+                                <div className="mt-4 flex justify-between items-center text-sm">
+                                    <button onClick={() => { setIsRegister(!isRegister); setError(''); }} className="text-blue-400 hover:underline">
+                                        {isRegister ? "Já tenho conta" : "Criar conta nova"}
+                                    </button>
+                                    <button onClick={startSession} className="text-slate-500 hover:text-white">
+                                        Modo Visitante
+                                    </button>
+                                </div>
                             </div>
                         )}
-                        </div>
-                    </div>
-                    )}
 
-                    {/* STUDY SESSION VIEW */}
-                    {view === 'study' && studyQueue.length > 0 && (
-                    <div className="max-w-2xl mx-auto flex flex-col items-center h-[80vh] justify-center">
-                        
-                        <div className="w-full flex justify-between text-sm text-slate-500 mb-4 font-mono">
-                        <span>Card {currentCardIndex + 1} de {studyQueue.length}</span>
-                        <span>{studyQueue[currentCardIndex].deck || 'Geral'}</span>
-                        </div>
+                        {/* DASHBOARD */}
+                        {view === 'dashboard' && (
+                            <div className="animate-fade-in">
+                                <header className="mb-8 text-center md:text-left">
+                                    <h2 className="text-3xl font-bold text-white mb-2">Olá, {user ? user.email.split('@')[0] : 'Visitante'}</h2>
+                                    <div className="text-slate-400">Total de cards na base: <span className="text-blue-400 font-bold">{cards.length}</span></div>
+                                </header>
 
-                        {/* Flashcard Area */}
-                        <div 
-                        className="w-full aspect-video bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 relative perspective-1000 cursor-pointer group"
-                        onClick={() => setIsFlipped(!isFlipped)}
-                        >
-                        <div className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`} style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
-                            
-                            {/* FRONT */}
-                            <div className="absolute inset-0 backface-hidden flex items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden' }}>
-                            <h2 className="text-2xl md:text-3xl font-medium text-white">
-                                {studyQueue[currentCardIndex].front}
-                            </h2>
-                            <span className="absolute bottom-4 text-xs text-slate-500 uppercase tracking-widest">Frente &bull; Toque para virar</span>
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div onClick={startSession} className="bg-gradient-to-br from-blue-700 to-indigo-900 p-8 rounded-2xl shadow-lg cursor-pointer hover:scale-[1.02] transition-transform text-white relative overflow-hidden group">
+                                        <GraduationCap className="absolute -right-4 -bottom-4 opacity-20 w-32 h-32" />
+                                        <h3 className="text-2xl font-bold mb-2">Revisar Agora</h3>
+                                        <p className="text-blue-100 mb-6">O algoritmo selecionou os cards ideais para hoje.</p>
+                                        <button className="bg-white text-blue-900 px-6 py-2 rounded-full font-bold shadow-lg">Iniciar</button>
+                                    </div>
+                                    
+                                    <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700">
+                                        <h3 className="text-xl font-bold mb-4 text-white">Estatísticas Rápidas</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-slate-400">Total de Cards</span>
+                                                <span className="text-white">{cards.length}</span>
+                                            </div>
+                                            {user && (
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-slate-400">Cards Estudados</span>
+                                                    <span className="text-emerald-400">
+                                                        {cards.filter(c => c.userData.interval > 0).length}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+                        )}
 
-                            {/* BACK */}
-                            <div className="absolute inset-0 backface-hidden flex items-center justify-center p-8 text-center bg-slate-800 rounded-2xl border border-blue-500/30" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
-                            <p className="text-xl md:text-2xl text-blue-100 leading-relaxed">
-                                {studyQueue[currentCardIndex].back}
-                            </p>
+                        {/* ESTUDO (FLIP CARD) */}
+                        {view === 'study' && studyQueue.length > 0 && (
+                            <div className="max-w-xl mx-auto flex flex-col items-center h-[80vh] justify-center">
+                                <div className="w-full flex justify-between text-xs text-slate-500 uppercase tracking-widest mb-4">
+                                    <span>Card {currentIndex + 1} / {studyQueue.length}</span>
+                                    <span>{studyQueue[currentIndex].deck}</span>
+                                </div>
+
+                                <div className="relative w-full aspect-video cursor-pointer perspective-1000 group" onClick={() => setIsFlipped(!isFlipped)}>
+                                    <div className={`w-full h-full relative preserve-3d transition-transform duration-500 ${isFlipped ? 'rotate-y-180' : ''}`} style={{transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'}}>
+                                        {/* FRENTE */}
+                                        <div className="absolute inset-0 backface-hidden bg-slate-800 border-2 border-slate-700 rounded-2xl flex items-center justify-center p-8 text-center shadow-2xl" style={{backfaceVisibility: 'hidden'}}>
+                                            <h3 className="text-2xl font-medium text-white">{studyQueue[currentIndex].front}</h3>
+                                            <span className="absolute bottom-4 text-xs text-slate-500">Toque para ver a resposta</span>
+                                        </div>
+                                        {/* VERSO */}
+                                        <div className="absolute inset-0 backface-hidden bg-slate-800 border-2 border-blue-900/50 rounded-2xl flex items-center justify-center p-8 text-center shadow-2xl" style={{backfaceVisibility: 'hidden', transform: 'rotateY(180deg)'}}>
+                                            <p className="text-xl text-blue-100">{studyQueue[currentIndex].back}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CONTROLES DE AVALIAÇÃO */}
+                                <div className={`grid grid-cols-4 gap-3 w-full mt-8 transition-opacity duration-300 ${isFlipped ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                                    <button onClick={() => handleRate(0)} className="bg-red-900/20 text-red-400 border border-red-900/50 p-3 rounded-lg flex flex-col items-center hover:bg-red-900/40">
+                                        <span className="font-bold text-sm">Errei</span>
+                                        <span className="text-[10px] opacity-70">1 min</span>
+                                    </button>
+                                    <button onClick={() => handleRate(1)} className="bg-slate-700/30 text-slate-300 border border-slate-600/50 p-3 rounded-lg flex flex-col items-center hover:bg-slate-700/50">
+                                        <span className="font-bold text-sm">Difícil</span>
+                                        <span className="text-[10px] opacity-70">2 dias</span>
+                                    </button>
+                                    <button onClick={() => handleRate(2)} className="bg-blue-900/20 text-blue-400 border border-blue-900/50 p-3 rounded-lg flex flex-col items-center hover:bg-blue-900/40">
+                                        <span className="font-bold text-sm">Bom</span>
+                                        <span className="text-[10px] opacity-70">4 dias</span>
+                                    </button>
+                                    <button onClick={() => handleRate(3)} className="bg-emerald-900/20 text-emerald-400 border border-emerald-900/50 p-3 rounded-lg flex flex-col items-center hover:bg-emerald-900/40">
+                                        <span className="font-bold text-sm">Fácil</span>
+                                        <span className="text-[10px] opacity-70">7 dias</span>
+                                    </button>
+                                </div>
                             </div>
+                        )}
 
-                        </div>
-                        </div>
+                        {/* ADMIN PAINEL */}
+                        {view === 'admin' && isAdmin && (
+                            <div className="max-w-2xl mx-auto animate-fade-in">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-amber-500 flex items-center gap-2"><Lock/> Área Restrita</h2>
+                                    <button onClick={() => setView('dashboard')} className="text-slate-400 hover:text-white"><X/></button>
+                                </div>
 
-                        {/* Controls */}
-                        <div className={`mt-8 w-full transition-opacity duration-300 ${isFlipped ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-                        <div className="grid grid-cols-4 gap-2 md:gap-4">
-                            <button onClick={() => handleRateCard(0)} className="flex flex-col items-center p-3 rounded-lg bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 transition-colors">
-                            <span className="font-bold">Errei</span>
-                            <span className="text-xs opacity-70 mt-1">&lt; 1 min</span>
-                            </button>
-                            <button onClick={() => handleRateCard(1)} className="flex flex-col items-center p-3 rounded-lg bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 border border-slate-700 transition-colors">
-                            <span className="font-bold">Difícil</span>
-                            <span className="text-xs opacity-70 mt-1">2 dias</span>
-                            </button>
-                            <button onClick={() => handleRateCard(2)} className="flex flex-col items-center p-3 rounded-lg bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 border border-blue-900/30 transition-colors">
-                            <span className="font-bold">Bom</span>
-                            <span className="text-xs opacity-70 mt-1">4 dias</span>
-                            </button>
-                            <button onClick={() => handleRateCard(3)} className="flex flex-col items-center p-3 rounded-lg bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/30 transition-colors">
-                            <span className="font-bold">Fácil</span>
-                            <span className="text-xs opacity-70 mt-1">7 dias</span>
-                            </button>
-                        </div>
-                        </div>
+                                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
+                                    <h3 className="text-lg font-bold text-white mb-4">{editingId ? 'Editar Card' : 'Adicionar Novo Card'}</h3>
+                                    <div className="space-y-4">
+                                        <textarea 
+                                            placeholder="Pergunta (Frente)" 
+                                            className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white"
+                                            rows="2"
+                                            value={newCard.front}
+                                            onChange={e => setNewCard({...newCard, front: e.target.value})}
+                                        ></textarea>
+                                        <textarea 
+                                            placeholder="Resposta (Verso)" 
+                                            className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white"
+                                            rows="3"
+                                            value={newCard.back}
+                                            onChange={e => setNewCard({...newCard, back: e.target.value})}
+                                        ></textarea>
+                                        <div className="flex justify-end gap-3">
+                                            {editingId && <button onClick={() => { setEditingId(null); setNewCard({front:'',back:'',deck:'Computação'}); }} className="text-slate-400">Cancelar</button>}
+                                            <button onClick={handleSaveCard} className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded font-bold flex items-center gap-2">
+                                                <Save size={18}/> Salvar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    </div>
-                    )}
-
-                    {/* ADMIN PANEL */}
-                    {view === 'admin' && isAdmin && (
-                    <div className="animate-fade-in">
-                        <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                            <Lock className="w-6 h-6 text-amber-500" />
-                            Administração
-                        </h2>
-                        <Button variant="ghost" onClick={() => setView('dashboard')}>
-                            <X className="w-5 h-5" /> Fechar
-                        </Button>
-                        </div>
-
-                        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
-                        <h3 className="text-lg font-medium text-white mb-4">{editingId ? 'Editar Flashcard' : 'Novo Flashcard'}</h3>
-                        <div className="grid gap-4">
-                            <CardInput 
-                                label="Frente (Pergunta)" 
-                                value={newCard.front} 
-                                onChange={e => setNewCard({...newCard, front: e.target.value})}
-                                placeholder="Ex: O que é Polimorfismo?"
-                                isTextarea
-                            />
-                            <CardInput 
-                                label="Verso (Resposta)" 
-                                value={newCard.back} 
-                                onChange={e => setNewCard({...newCard, back: e.target.value})}
-                                placeholder="Ex: Capacidade de um objeto ser tratado..."
-                                isTextarea
-                            />
-                            <CardInput 
-                                label="Nome do Deck" 
-                                value={newCard.deck} 
-                                onChange={e => setNewCard({...newCard, deck: e.target.value})}
-                            />
-                            
-                            <div className="flex gap-2 justify-end mt-2">
-                            {editingId && (
-                                <Button variant="ghost" onClick={() => { setEditingId(null); setNewCard({front:'', back:'', deck: 'Geral'}) }}>
-                                Cancelar
-                                </Button>
-                            )}
-                            <Button onClick={handleSaveCard}>
-                                <Save className="w-4 h-4" /> {editingId ? 'Atualizar' : 'Salvar Card'}
-                            </Button>
+                                <div className="space-y-3">
+                                    {cards.map(card => (
+                                        <div key={card.id} className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg flex justify-between items-start">
+                                            <div>
+                                                <p className="text-white font-medium">{card.front}</p>
+                                                <p className="text-slate-400 text-sm mt-1">{card.back}</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => { setEditingId(card.id); setNewCard({front: card.front, back: card.back, deck: card.deck}); window.scrollTo({top:0, behavior:'smooth'}); }} className="text-blue-400 hover:bg-blue-900/30 p-2 rounded"><Edit3 size={18}/></button>
+                                                <button onClick={() => handleDelete(card.id)} className="text-red-400 hover:bg-red-900/30 p-2 rounded"><Trash2 size={18}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                        </div>
-
-                        <div className="space-y-4">
-                        <h3 className="text-slate-400 text-sm font-bold uppercase tracking-wider">Cards Existentes ({cards.length})</h3>
-                        {cards.map(card => (
-                            <div key={card.id} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 flex justify-between items-start group hover:bg-slate-800 transition-colors">
-                            <div className="pr-4">
-                                <p className="font-medium text-slate-200 mb-1">{card.front}</p>
-                                <p className="text-sm text-slate-500 line-clamp-1">{card.back}</p>
-                                <span className="inline-block mt-2 text-xs bg-slate-700 px-2 py-1 rounded text-slate-400">{card.deck}</span>
-                            </div>
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button 
-                                onClick={() => {
-                                    setNewCard({ front: card.front, back: card.back, deck: card.deck || 'Geral' });
-                                    setEditingId(card.id);
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg"
-                                >
-                                <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button 
-                                onClick={() => handleDeleteCard(card.id)}
-                                className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg"
-                                >
-                                <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                            </div>
-                        ))}
-                        </div>
-                    </div>
-                    )}
-
-                </main>
+                        )}
+                    </main>
                 </div>
             );
         }
