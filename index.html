@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anki Pro - Digital</title>
+    
+    <!-- Tailwind CSS (Estilização) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel (Para entender JSX no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Import Map: Define onde buscar as bibliotecas -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.294.0",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"
+      }
+    }
+    </script>
+
+    <style>
+        /* Animações Personalizadas */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+        body {
+            background-color: #0f172a; /* slate-900 */
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100">
+    <div id="root"></div>
+
+    <!-- Aplicação React -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { initializeApp } from "firebase/app";
+        import { 
+            getAuth, 
+            signInWithEmailAndPassword, 
+            signOut, 
+            onAuthStateChanged 
+        } from "firebase/auth";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            getDocs, 
+            doc, 
+            updateDoc, 
+            deleteDoc, 
+            setDoc, 
+            serverTimestamp 
+        } from "firebase/firestore";
+        import { 
+            Brain, 
+            LogOut, 
+            Trash2, 
+            Edit2, 
+            Save, 
+            X, 
+            Layout, 
+            RotateCw,
+            Lock
+        } from 'lucide-react';
+
+        // --- CONFIGURAÇÃO FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
+            authDomain: "ankidigital.firebaseapp.com",
+            projectId: "ankidigital",
+            storageBucket: "ankidigital.firebasestorage.app",
+            messagingSenderId: "407660648093",
+            appId: "1:407660648093:web:b7bf69730e90a28cb36674"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // ID do App para estrutura de caminhos (Evita erros de permissão)
+        const APP_ID = 'ankidigital';
+
+        // --- UTILITÁRIOS ---
+
+        const calculateNextReview = (rating, previousInterval, previousEase) => {
+            let newInterval;
+            let newEase = previousEase || 2.5;
+
+            if (rating === 0) {
+                newInterval = 1; 
+                newEase = Math.max(1.3, newEase - 0.2);
+            } else {
+                if (previousInterval === 0) {
+                    newInterval = 1;
+                } else if (previousInterval === 1) {
+                    newInterval = 3;
+                } else {
+                    newInterval = Math.round(previousInterval * newEase);
+                }
+                if (rating === 1) newEase -= 0.15;
+                if (rating === 3) newEase += 0.15;
+            }
+
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + newInterval);
+            
+            return { interval: newInterval, ease: newEase, dueDate };
+        };
+
+        // --- COMPONENTES UI ---
+
+        const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }) => {
+            const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
+            const variants = {
+                primary: "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30",
+                secondary: "bg-slate-700 hover:bg-slate-600 text-slate-200",
+                danger: "bg-red-500 hover:bg-red-600 text-white",
+                ghost: "bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white"
+            };
+            return (
+                <button 
+                onClick={onClick} 
+                disabled={disabled}
+                className={`${baseStyle} ${variants[variant]} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
+                >
+                {children}
+                </button>
+            );
+        };
+
+        const Input = ({ ...props }) => (
+            <input 
+                {...props} 
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-slate-500"
+            />
+        );
+
+        const CardInput = ({ label, value, onChange, placeholder, isTextarea = false }) => (
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-400 mb-1">{label}</label>
+                {isTextarea ? (
+                <textarea 
+                    value={value} 
+                    onChange={onChange} 
+                    placeholder={placeholder}
+                    rows={3}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder-slate-500 resize-none"
+                />
+                ) : (
+                <Input value={value} onChange={onChange} placeholder={placeholder} />
+                )}
+            </div>
+        );
+
+        // --- APP PRINCIPAL ---
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [view, setView] = useState('loading');
+            const [cards, setCards] = useState([]);
+            const [studyQueue, setStudyQueue] = useState([]);
+            const [currentCardIndex, setCurrentCardIndex] = useState(0);
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [loading, setLoading] = useState(true);
+
+            // Auth State
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            // Admin State
+            const [newCard, setNewCard] = useState({ front: '', back: '', deck: 'Geral' });
+            const [editingId, setEditingId] = useState(null);
+
+            useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+                    setUser(currentUser);
+                    if (currentUser) {
+                        const adminCheck = currentUser.email?.endsWith('@userpro.com') || false;
+                        setIsAdmin(adminCheck);
+                        setView('dashboard');
+                        fetchCards(currentUser.uid);
+                    } else {
+                        setIsAdmin(false);
+                        setView('login');
+                        fetchCards(null);
+                    }
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // --- ACESSO AO BANCO DE DADOS (Caminhos Corrigidos) ---
+
+            const fetchCards = async (userId) => {
+                setLoading(true);
+                try {
+                    // 1. Buscar Deck Geral (Caminho Público)
+                    const cardsCollection = collection(db, 'artifacts', APP_ID, 'public', 'data', 'cards');
+                    const querySnapshot = await getDocs(cardsCollection);
+                    const rawCards = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    let finalCards = rawCards;
+
+                    // 2. Se logado, buscar progresso (Caminho Privado)
+                    if (userId) {
+                        const progressCollection = collection(db, 'artifacts', APP_ID, 'users', userId, 'progress');
+                        const progressSnap = await getDocs(progressCollection);
+                        const progressMap = {};
+                        progressSnap.docs.forEach(doc => {
+                            progressMap[doc.id] = doc.data();
+                        });
+
+                        finalCards = rawCards.map(card => {
+                            const progress = progressMap[card.id];
+                            return {
+                                ...card,
+                                progress: progress || { interval: 0, ease: 2.5, dueDate: null }
+                            };
+                        });
+                    }
+
+                    setCards(finalCards);
+                } catch (err) {
+                    console.error("Erro detalhado:", err);
+                    if (err.code === 'permission-denied') {
+                        setError("Acesso negado. Verifique as regras do banco de dados.");
+                    } else {
+                        setError("Falha ao carregar dados.");
+                    }
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleSaveCard = async () => {
+                if (!newCard.front || !newCard.back) return;
+                
+                try {
+                    const cardsCollection = collection(db, 'artifacts', APP_ID, 'public', 'data', 'cards');
+
+                    if (editingId) {
+                        const cardRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'cards', editingId);
+                        await updateDoc(cardRef, {
+                            front: newCard.front,
+                            back: newCard.back,
+                            deck: newCard.deck,
+                            updatedAt: serverTimestamp()
+                        });
+                        setEditingId(null);
+                    } else {
+                        await addDoc(cardsCollection, {
+                            ...newCard,
+                            createdAt: serverTimestamp()
+                        });
+                    }
+                    
+                    setNewCard({ front: '', back: '', deck: 'Geral' });
+                    fetchCards(user?.uid);
+                    alert(editingId ? "Card atualizado!" : "Card criado com sucesso!");
+                } catch (err) {
+                    alert("Erro ao salvar: " + err.message);
+                }
+            };
+
+            const handleDeleteCard = async (id) => {
+                if (!window.confirm("Tem certeza que deseja excluir este card?")) return;
+                try {
+                    const cardRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'cards', id);
+                    await deleteDoc(cardRef);
+                    fetchCards(user?.uid);
+                } catch (err) {
+                    alert("Erro ao excluir: " + err.message);
+                }
+            };
+
+            const handleRateCard = async (rating) => {
+                if (!user) {
+                    nextCard();
+                    return;
+                }
+
+                const currentCard = studyQueue[currentCardIndex];
+                const prevInterval = currentCard.progress?.interval || 0;
+                const prevEase = currentCard.progress?.ease || 2.5;
+
+                const { interval, ease, dueDate } = calculateNextReview(rating, prevInterval, prevEase);
+
+                try {
+                    const progressRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'progress', currentCard.id);
+                    await setDoc(progressRef, {
+                        cardId: currentCard.id,
+                        interval,
+                        ease,
+                        dueDate: dueDate,
+                        lastReviewed: serverTimestamp()
+                    });
+                    
+                    nextCard();
+                } catch (err) {
+                    console.error("Erro ao salvar progresso:", err);
+                }
+            };
+
+            // --- HANDLERS COMUNS ---
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setError('');
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (err) {
+                    setError("Erro ao entrar. Verifique email e senha.");
+                }
+            };
+
+            const handleLogout = async () => {
+                await signOut(auth);
+                setEmail('');
+                setPassword('');
+            };
+
+            const startSession = () => {
+                const now = new Date();
+                let queue = [];
+                
+                if (user) {
+                    queue = cards.filter(card => {
+                        if (!card.progress || !card.progress.dueDate) return true;
+                        return new Date(card.progress.dueDate.seconds * 1000) <= now;
+                    });
+                } else {
+                    queue = [...cards].sort(() => Math.random() - 0.5);
+                }
+
+                if (queue.length === 0) {
+                    alert("Nenhum card para revisar agora! Bom trabalho.");
+                    return;
+                }
+
+                setStudyQueue(queue);
+                setCurrentCardIndex(0);
+                setIsFlipped(false);
+                setView('study');
+            };
+
+            const nextCard = () => {
+                if (currentCardIndex + 1 < studyQueue.length) {
+                    setIsFlipped(false);
+                    setTimeout(() => setCurrentCardIndex(curr => curr + 1), 150);
+                } else {
+                    alert("Sessão concluída!");
+                    setView('dashboard');
+                    fetchCards(user?.uid);
+                }
+            };
+
+            // --- RENDERIZAÇÃO ---
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400">
+                        <RotateCw className="w-8 h-8 animate-spin" />
+                        <span className="ml-3 font-mono">Carregando sistema...</span>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
+                
+                {/* NAVBAR */}
+                <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+                    <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-blue-400">
+                        <Brain className="w-6 h-6" />
+                        <span className="font-bold text-lg tracking-tight">Anki<span className="text-white">Pro</span></span>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                        {user ? (
+                        <>
+                            {isAdmin && (
+                            <button 
+                                onClick={() => setView('admin')}
+                                className="text-sm font-medium text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                            >
+                                <Lock className="w-3 h-3" /> Painel Admin
+                            </button>
+                            )}
+                            <button 
+                            onClick={() => setView('dashboard')}
+                            className="text-sm font-medium text-slate-400 hover:text-white"
+                            >
+                            Estudar
+                            </button>
+                            <div className="h-4 w-px bg-slate-700"></div>
+                            <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors">
+                            <LogOut className="w-5 h-5" />
+                            </button>
+                        </>
+                        ) : (
+                        <button 
+                            onClick={() => setView('login')}
+                            className="text-sm font-medium text-blue-400 hover:text-blue-300"
+                        >
+                            Login Profissional
+                        </button>
+                        )}
+                    </div>
+                    </div>
+                </nav>
+
+                <main className="max-w-3xl mx-auto px-4 py-8">
+                    
+                    {/* LOGIN VIEW */}
+                    {view === 'login' && (
+                    <div className="max-w-md mx-auto mt-12 bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700">
+                        <h2 className="text-2xl font-bold text-white mb-2">Acesso Restrito</h2>
+                        <p className="text-slate-400 mb-6 text-sm">Faça login para salvar seu progresso. Visitantes apenas visualizam.</p>
+                        
+                        <form onSubmit={handleLogin} className="space-y-4">
+                        <Input 
+                            type="email" 
+                            placeholder="email@userpro.com" 
+                            value={email} 
+                            onChange={e => setEmail(e.target.value)} 
+                        />
+                        <Input 
+                            type="password" 
+                            placeholder="Senha" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)} 
+                        />
+                        {error && <p className="text-red-400 text-sm">{error}</p>}
+                        
+                        <Button type="submit" className="w-full">Entrar</Button>
+                        </form>
+
+                        <div className="mt-6 pt-6 border-t border-slate-700 text-center">
+                        <p className="text-slate-500 mb-3 text-sm">Apenas quer praticar?</p>
+                        <Button variant="secondary" className="w-full" onClick={startSession}>
+                            Modo Visitante (Sem Salvar)
+                        </Button>
+                        </div>
+                    </div>
+                    )}
+
+                    {/* DASHBOARD VIEW */}
+                    {view === 'dashboard' && (
+                    <div className="animate-fade-in">
+                        <header className="mb-8">
+                        <h1 className="text-3xl font-bold text-white">Olá, {user ? user.email.split('@')[0] : 'Visitante'}</h1>
+                        <p className="text-slate-400 mt-1">Você tem <strong className="text-blue-400">{cards.length}</strong> cartões disponíveis no total.</p>
+                        </header>
+
+                        <div className="grid gap-6 md:grid-cols-2">
+                        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 shadow-lg shadow-blue-900/20 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform cursor-pointer" onClick={startSession}>
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Brain size={120} />
+                            </div>
+                            <h3 className="text-xl font-bold mb-2">Revisão Inteligente</h3>
+                            <p className="text-blue-100 text-sm mb-6">O algoritmo calculou os itens que você está prestes a esquecer.</p>
+                            <Button variant="secondary" className="bg-white/10 hover:bg-white/20 border border-white/20">
+                            Começar Agora
+                            </Button>
+                        </div>
+
+                        {isAdmin && (
+                            <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer group" onClick={() => setView('admin')}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold text-white">Gerenciar Deck</h3>
+                                <Layout className="text-slate-500 group-hover:text-blue-400" />
+                            </div>
+                            <p className="text-slate-400 text-sm">Adicione, edite ou remova flashcards do banco de dados global.</p>
+                            </div>
+                        )}
+                        </div>
+                    </div>
+                    )}
+
+                    {/* STUDY SESSION VIEW */}
+                    {view === 'study' && studyQueue.length > 0 && (
+                    <div className="max-w-2xl mx-auto flex flex-col items-center h-[80vh] justify-center">
+                        
+                        <div className="w-full flex justify-between text-sm text-slate-500 mb-4 font-mono">
+                        <span>Card {currentCardIndex + 1} de {studyQueue.length}</span>
+                        <span>{studyQueue[currentCardIndex].deck || 'Geral'}</span>
+                        </div>
+
+                        {/* Flashcard Area */}
+                        <div 
+                        className="w-full aspect-video bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 relative perspective-1000 cursor-pointer group"
+                        onClick={() => setIsFlipped(!isFlipped)}
+                        >
+                        <div className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`} style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
+                            
+                            {/* FRONT */}
+                            <div className="absolute inset-0 backface-hidden flex items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden' }}>
+                            <h2 className="text-2xl md:text-3xl font-medium text-white">
+                                {studyQueue[currentCardIndex].front}
+                            </h2>
+                            <span className="absolute bottom-4 text-xs text-slate-500 uppercase tracking-widest">Frente &bull; Toque para virar</span>
+                            </div>
+
+                            {/* BACK */}
+                            <div className="absolute inset-0 backface-hidden flex items-center justify-center p-8 text-center bg-slate-800 rounded-2xl border border-blue-500/30" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                            <p className="text-xl md:text-2xl text-blue-100 leading-relaxed">
+                                {studyQueue[currentCardIndex].back}
+                            </p>
+                            </div>
+
+                        </div>
+                        </div>
+
+                        {/* Controls */}
+                        <div className={`mt-8 w-full transition-opacity duration-300 ${isFlipped ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                        <div className="grid grid-cols-4 gap-2 md:gap-4">
+                            <button onClick={() => handleRateCard(0)} className="flex flex-col items-center p-3 rounded-lg bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 transition-colors">
+                            <span className="font-bold">Errei</span>
+                            <span className="text-xs opacity-70 mt-1">&lt; 1 min</span>
+                            </button>
+                            <button onClick={() => handleRateCard(1)} className="flex flex-col items-center p-3 rounded-lg bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 border border-slate-700 transition-colors">
+                            <span className="font-bold">Difícil</span>
+                            <span className="text-xs opacity-70 mt-1">2 dias</span>
+                            </button>
+                            <button onClick={() => handleRateCard(2)} className="flex flex-col items-center p-3 rounded-lg bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 border border-blue-900/30 transition-colors">
+                            <span className="font-bold">Bom</span>
+                            <span className="text-xs opacity-70 mt-1">4 dias</span>
+                            </button>
+                            <button onClick={() => handleRateCard(3)} className="flex flex-col items-center p-3 rounded-lg bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/30 transition-colors">
+                            <span className="font-bold">Fácil</span>
+                            <span className="text-xs opacity-70 mt-1">7 dias</span>
+                            </button>
+                        </div>
+                        </div>
+
+                    </div>
+                    )}
+
+                    {/* ADMIN PANEL */}
+                    {view === 'admin' && isAdmin && (
+                    <div className="animate-fade-in">
+                        <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                            <Lock className="w-6 h-6 text-amber-500" />
+                            Administração
+                        </h2>
+                        <Button variant="ghost" onClick={() => setView('dashboard')}>
+                            <X className="w-5 h-5" /> Fechar
+                        </Button>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8">
+                        <h3 className="text-lg font-medium text-white mb-4">{editingId ? 'Editar Flashcard' : 'Novo Flashcard'}</h3>
+                        <div className="grid gap-4">
+                            <CardInput 
+                                label="Frente (Pergunta)" 
+                                value={newCard.front} 
+                                onChange={e => setNewCard({...newCard, front: e.target.value})}
+                                placeholder="Ex: O que é Polimorfismo?"
+                                isTextarea
+                            />
+                            <CardInput 
+                                label="Verso (Resposta)" 
+                                value={newCard.back} 
+                                onChange={e => setNewCard({...newCard, back: e.target.value})}
+                                placeholder="Ex: Capacidade de um objeto ser tratado..."
+                                isTextarea
+                            />
+                            <CardInput 
+                                label="Nome do Deck" 
+                                value={newCard.deck} 
+                                onChange={e => setNewCard({...newCard, deck: e.target.value})}
+                            />
+                            
+                            <div className="flex gap-2 justify-end mt-2">
+                            {editingId && (
+                                <Button variant="ghost" onClick={() => { setEditingId(null); setNewCard({front:'', back:'', deck: 'Geral'}) }}>
+                                Cancelar
+                                </Button>
+                            )}
+                            <Button onClick={handleSaveCard}>
+                                <Save className="w-4 h-4" /> {editingId ? 'Atualizar' : 'Salvar Card'}
+                            </Button>
+                            </div>
+                        </div>
+                        </div>
+
+                        <div className="space-y-4">
+                        <h3 className="text-slate-400 text-sm font-bold uppercase tracking-wider">Cards Existentes ({cards.length})</h3>
+                        {cards.map(card => (
+                            <div key={card.id} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 flex justify-between items-start group hover:bg-slate-800 transition-colors">
+                            <div className="pr-4">
+                                <p className="font-medium text-slate-200 mb-1">{card.front}</p>
+                                <p className="text-sm text-slate-500 line-clamp-1">{card.back}</p>
+                                <span className="inline-block mt-2 text-xs bg-slate-700 px-2 py-1 rounded text-slate-400">{card.deck}</span>
+                            </div>
+                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                onClick={() => {
+                                    setNewCard({ front: card.front, back: card.back, deck: card.deck || 'Geral' });
+                                    setEditingId(card.id);
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg"
+                                >
+                                <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button 
+                                onClick={() => handleDeleteCard(card.id)}
+                                className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg"
+                                >
+                                <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                    )}
+
+                </main>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
