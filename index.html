@@ -55,7 +55,8 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <!-- Adicionado data-type="module" para suportar imports do Firebase -->
+    <script type="text/babel" data-type="module">
         // --- IMPORTAÇÕES FIREBASE (Módulos ES) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { 
@@ -112,6 +113,7 @@
         };
 
         // --- COMPONENTES UI (Ícones Lucide) ---
+        // Renderiza icones usando a tag i que o script do Lucide substitui por SVG
         const Icons = {
             Brain: () => <i data-lucide="brain" className="w-6 h-6 text-blue-500"></i>,
             LogOut: () => <i data-lucide="log-out" className="w-4 h-4"></i>,
@@ -137,7 +139,9 @@
             
             // Render Icons Effect
             React.useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
             });
 
             // Auth Listener
@@ -166,7 +170,7 @@
                     setCards(loadedCards);
                 } catch (error) {
                     console.error("Erro ao carregar cards:", error);
-                    alert("Erro de conexão. Verifique o console.");
+                    // Não mostramos alerta aqui para evitar spam se for apenas delay de rede
                 }
             };
 
@@ -211,7 +215,10 @@
                     queue = queue.filter(card => {
                         const review = reviews[card.id];
                         if (!review) return true; // Card novo
-                        return review.dueDate.toDate() <= now; // Card vencido
+                        
+                        // Verifica se é um timestamp do Firestore ou um objeto Date já convertido
+                        const dueDate = review.dueDate.toDate ? review.dueDate.toDate() : new Date(review.dueDate);
+                        return dueDate <= now; // Card vencido
                     });
                 } else {
                     // Visitante: Estuda tudo (Modo Cram)
@@ -461,7 +468,14 @@
 
                     // Atualizar estado local
                     const newReviewData = { ...result, dueDate };
-                    const newReviews = { ...reviews, [card.id]: { ...newReviewData, dueDate: { toDate: () => dueDate } } }; // Mock toDate for local update
+                    // IMPORTANTE: Simulamos o método toDate() para que a UI funcione imediatamente sem recarregar do Firebase
+                    const newReviews = { 
+                        ...reviews, 
+                        [card.id]: { 
+                            ...newReviewData, 
+                            dueDate: { toDate: () => dueDate } 
+                        } 
+                    }; 
                     setReviews(newReviews);
 
                     // Salvar no Firestore (Fire & Forget para performance)
