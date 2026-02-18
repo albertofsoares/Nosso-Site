@@ -1063,7 +1063,17 @@
                                         {existingLessons.map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
 
-                                    {/* 3. Text Search */}
+                                    {/* 3. Topic Selector (NOVO) */}
+                                    <select 
+                                        value={filterSubcategory} 
+                                        onChange={(e) => setFilterSubcategory(e.target.value)} 
+                                        className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500 transition-colors"
+                                    >
+                                        <option value="Todos">Todos Tópicos</option>
+                                        {existingSubcategories.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+
+                                    {/* 4. Text Search */}
                                     <div className="relative">
                                         <input 
                                             type="text" 
