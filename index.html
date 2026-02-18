@@ -129,7 +129,7 @@
         import { 
             Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, 
             Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw,
-            Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2
+            Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search
         } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
@@ -915,11 +915,33 @@
         const AdminPanel = ({ cards, setCards, onExit }) => {
             const [form, setForm] = React.useState({ front: '', back: '', category: 'Geral', subcategory: '' });
             const [editingId, setEditingId] = React.useState(null);
-            const [filterCategory, setFilterCategory] = React.useState('Todos');
             
-            const existingCategories = [...new Set(cards.map(c => c.category || ''))].filter(Boolean);
-            const existingSubcategories = [...new Set(cards.map(c => c.subcategory || ''))].filter(Boolean);
-            const filteredCards = filterCategory === 'Todos' ? cards : cards.filter(c => c.category === filterCategory);
+            // --- ESTADOS DOS FILTROS ---
+            const [filterCategory, setFilterCategory] = React.useState('Todos');
+            const [filterSubcategory, setFilterSubcategory] = React.useState('Todos');
+            const [searchTerm, setSearchTerm] = React.useState('');
+            
+            // Sugestões para o formulário (Global)
+            const existingCategories = [...new Set(cards.map(c => c.category || ''))].filter(Boolean).sort();
+            const existingSubcategories = [...new Set(cards.map(c => c.subcategory || ''))].filter(Boolean).sort();
+            
+            // Lógica de Subcategorias Disponíveis no Filtro (Baseado na categoria selecionada)
+            const availableSubcategories = React.useMemo(() => {
+                let relevantCards = cards;
+                if (filterCategory !== 'Todos') {
+                    relevantCards = cards.filter(c => c.category === filterCategory);
+                }
+                return [...new Set(relevantCards.map(c => c.subcategory || ''))].filter(Boolean).sort();
+            }, [cards, filterCategory]);
+
+            // Lógica de Filtragem Principal
+            const filteredCards = cards.filter(c => {
+                const matchCategory = filterCategory === 'Todos' || c.category === filterCategory;
+                const matchSubcategory = filterSubcategory === 'Todos' || c.subcategory === filterSubcategory;
+                const matchSearch = searchTerm === '' || (c.front || '').toLowerCase().includes(searchTerm.toLowerCase());
+                
+                return matchCategory && matchSubcategory && matchSearch;
+            });
 
             const handleSave = async (e) => {
                 e.preventDefault();
@@ -950,17 +972,55 @@
                     </div>
                     
                     <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                        {/* LISTA (Mobile: Altura fixa pequena / Desktop: Full height) */}
+                        {/* LISTA E FILTROS */}
                         <div className="w-full md:w-1/3 flex flex-col border-b md:border-b-0 md:border-r border-slate-700/50 pb-4 md:pr-4 h-64 md:h-auto">
-                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0">
-                                <div className="flex items-center gap-2 mb-2">
+                            
+                            {/* NOVA ÁREA DE FILTROS APRIMORADA */}
+                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0 space-y-3">
+                                <div className="flex items-center gap-2">
                                     <Filter size={16} className="text-slate-500" />
-                                    <span className="text-xs text-slate-400 font-bold uppercase">Filtrar Deck</span>
+                                    <span className="text-xs text-slate-400 font-bold uppercase">Filtros de Busca</span>
                                 </div>
-                                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500 transition-colors">
-                                    <option value="Todos">Todos ({cards.length})</option>
-                                    {existingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                </select>
+                                
+                                <div className="grid grid-cols-1 gap-2">
+                                    {/* 1. Deck Selector */}
+                                    <select 
+                                        value={filterCategory} 
+                                        onChange={(e) => { 
+                                            setFilterCategory(e.target.value); 
+                                            setFilterSubcategory('Todos'); // Reset sub quando muda cat
+                                        }} 
+                                        className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500 transition-colors"
+                                    >
+                                        <option value="Todos">Todas Matérias</option>
+                                        {existingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    </select>
+
+                                    {/* 2. Topic Selector */}
+                                    <select 
+                                        value={filterSubcategory} 
+                                        onChange={(e) => setFilterSubcategory(e.target.value)} 
+                                        className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500 transition-colors"
+                                    >
+                                        <option value="Todos">Todos Tópicos</option>
+                                        {availableSubcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                                    </select>
+
+                                    {/* 3. Text Search */}
+                                    <div className="relative">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Buscar na frente..." 
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 transition-colors placeholder:text-slate-600"
+                                        />
+                                        <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500 pointer-events-none"/>
+                                    </div>
+                                </div>
+                                <div className="text-xs text-slate-500 text-right font-mono">
+                                    {filteredCards.length} nodes encontrados
+                                </div>
                             </div>
 
                             <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
@@ -983,7 +1043,7 @@
                             </div>
                         </div>
 
-                        {/* FORMULÁRIO (Mobile: Scrolla com a página / Desktop: Scrolla interno) */}
+                        {/* FORMULÁRIO */}
                         <div className="flex-1 overflow-y-auto pl-0 md:pl-2 custom-scrollbar pb-20 md:pb-0">
                              <form onSubmit={handleSave} className="space-y-4 bg-slate-900/20 p-2 rounded-xl">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
