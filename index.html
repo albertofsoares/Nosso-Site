@@ -982,16 +982,23 @@
             const [filterSubcategory, setFilterSubcategory] = React.useState('Todos');
             const [searchTerm, setSearchTerm] = React.useState('');
             
-            // Sugestões para o formulário (Global)
-            const existingCategories = [...new Set(cards.map(c => c.category || ''))].filter(Boolean).sort();
-            const existingLessons = [...new Set(cards.map(c => c.lesson || ''))].filter(Boolean).sort();
-            const existingSubcategories = [...new Set(cards.map(c => c.subcategory || ''))].filter(Boolean).sort();
+            // Sugestões para o formulário (Global) & Filtros
+            // Normalizamos os dados para garantir que campos vazios apareçam nos filtros como seus valores padrão
+            const getUnique = (key, defaultVal) => [...new Set(cards.map(c => c[key] || defaultVal))].sort();
+            
+            const existingCategories = getUnique('category', 'Sem Categoria');
+            const existingLessons = getUnique('lesson', 'Conteúdo Geral');
+            const existingSubcategories = getUnique('subcategory', 'Geral');
             
             // Lógica de Filtragem
             const filteredCards = cards.filter(c => {
-                const matchCategory = filterCategory === 'Todos' || c.category === filterCategory;
-                const matchLesson = filterLesson === 'Todos' || (c.lesson || 'Conteúdo Geral') === filterLesson;
-                const matchSubcategory = filterSubcategory === 'Todos' || c.subcategory === filterSubcategory;
+                const normCategory = c.category || 'Sem Categoria';
+                const normLesson = c.lesson || 'Conteúdo Geral';
+                const normSub = c.subcategory || 'Geral';
+
+                const matchCategory = filterCategory === 'Todos' || normCategory === filterCategory;
+                const matchLesson = filterLesson === 'Todos' || normLesson === filterLesson;
+                const matchSubcategory = filterSubcategory === 'Todos' || normSub === filterSubcategory;
                 const matchSearch = searchTerm === '' || (c.front || '').toLowerCase().includes(searchTerm.toLowerCase());
                 
                 return matchCategory && matchLesson && matchSubcategory && matchSearch;
@@ -1096,8 +1103,8 @@
                                         <div className="flex justify-between items-start">
                                             <div className="w-full">
                                                 <div className="flex flex-col mb-1">
-                                                    <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{c.category}</span>
-                                                    <span className="text-slate-500 text-[10px] font-bold">{c.lesson || 'Geral'} &gt; {c.subcategory}</span>
+                                                    <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{(c.category || 'Sem Categoria')}</span>
+                                                    <span className="text-slate-500 text-[10px] font-bold">{(c.lesson || 'Conteúdo Geral')} &gt; {(c.subcategory || 'Geral')}</span>
                                                 </div>
                                                 <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (c.front || '').replace(/<[^>]*>?/gm, '')}}></div>
                                             </div>
