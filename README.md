@@ -1,113 +1,72 @@
-📂 System Update Log: L1 Cache v2.0
-Status da Build: Stable Release
-Stack: React 18, Tailwind CSS, Firebase v10.8 (Auth/Firestore)
+# 🚀 L1 Cache v2.0 | Memory Retention Engine
 
-1. 🧠 Core Engine & Algoritmos
-Implementação de lógica avançada de retenção de memória baseada em ciência cognitiva.
+<p align="left">
+  <img src="https://img.shields.io/badge/Build-Stable_Release-00f2ff?style=for-the-badge&logo=render" alt="Status">
+  <img src="https://img.shields.io/badge/Stack-React_18_|_Tailwind_|_Firebase-7928CA?style=for-the-badge" alt="Stack">
+</p>
 
-Algoritmo SRS (Space Repetition System): Implementação personalizada do algoritmo SM-2 (SuperMemo 2).
+> **System Update Log:** Implementação de lógica avançada de retenção de memória baseada em ciência cognitiva para estudantes de alta performance.
 
-Cálculo dinâmico de intervalos de revisão com base no Ease Factor.
+---
 
-Estados de memória distintos: learning (aprendizado) e graduated (graduado/memória de longo prazo).
+## 🧠 Core Engine & Algoritmos
+Focado em vencer a **Curva do Esquecimento** através de engenharia de software precisa.
 
-Lógica de "Cram Mode" (Revisão forçada) caso o deck esteja vazio.
+* **Algoritmo SRS (Spaced Repetition System):** Implementação personalizada do **SM-2 (SuperMemo 2)**.
+* **Cálculo Dinâmico:** Ajuste em tempo real dos intervalos de revisão baseado no *Ease Factor*.
+* **Memory States:** Transição de estados entre `learning` (curto prazo) e `graduated` (longo prazo).
+* **Cram Mode:** Lógica de recursão para revisão forçada quando a fila está vazia.
 
-Gestão de Estado Global: Utilização de React.useState e useEffect para controle de sessão, filas de estudo e autenticação.
+---
 
-Tratamento de Erros (Kernel Panic): Implementação de um Error Boundary que captura falhas críticas na renderização e exibe uma tela de "System Failure" com opção de reboot.
+## 📚 Interface de Estudo (Study Session)
+UX desenhada para reduzir o custo cognitivo durante o aprendizado ativo.
 
-2. 📚 Interface de Estudo (Study Session)
-Recursos focados na experiência do usuário durante o aprendizado ativo.
+### ⚡ Flashcards 3D & TTS
+- **Renderização Espacial:** Animação de *Flip* (Y-axis 180º) utilizando `perspective-1000`.
+- **Native TTS:** Integração com `window.speechSynthesis` configurada para **pt-BR** (1.1x speed).
 
-Flashcards 3D Interativos:
+### ⌨️ Controles de Input (Kernel Shortcuts)
+| Tecla | Ação |
+| :--- | :--- |
+| `Espaço` | Revelar Resposta (Flip Card) |
+| `1, 2, 3, 4` | Avaliar Dificuldade (Again, Hard, Good, Easy) |
 
-Animação de "Flip" (rotação 180º no eixo Y) utilizando CSS perspective-1000 e transform-style-3d.
+---
 
-Separação clara entre Front (Pergunta) e Back (Resposta).
+## 📊 Dashboard & Métricas
+Visualização de dados para monitoramento de consistência acadêmica.
 
-Text-to-Speech (TTS) Nativo:
+- **Heatmap de Consistência:** Gráfico estilo GitHub com gradiente dinâmico.
+- **Global Leaderboard:** Ranking em tempo real via Firestore (% Retenção e XP).
+- **Estatísticas Rápidas:** Contador de Cards Totais vs. Memorizados no Header.
 
-Integração com a API window.speechSynthesis.
+---
 
-Funcionalidade: Leitura em voz alta automática ou sob demanda (botão de áudio) tanto da pergunta quanto da resposta.
+## 🛠️ Painel Administrativo (God Mode)
+Gestão de conteúdo com controle de acesso estrito.
 
-Configuração para pt-BR com taxa de velocidade otimizada (1.1x).
+- **Gatekeeper:** Verificação de e-mail (domínio `@userpro.com`).
+- **CRUD de Cards:** Persistência imediata no Firestore com Editor WYSIWYG.
+- **Filtros Avançados:** Sistema de "Deck" e "Tópico" com Autocomplete.
 
-Controles de Input:
+---
 
-Atalhos de Teclado: Espaço para revelar a resposta, teclas 1, 2, 3, 4 para avaliar a dificuldade.
+## 🎨 UI/UX Design System
+Estética **Cyberpunk/Dev** focada em imersão.
 
-Feedback Visual: Botões de avaliação coloridos (Errei, Difícil, Bom, Fácil) que mostram o próximo intervalo de tempo calculado antes do clique.
+- **Tema:** Dark Mode (`Slate-950`) com acentos em `Blue-500` e `Purple-500`.
+- **Glassmorphism:** Uso de `backdrop-filter: blur` e transparências.
+- **Tipografia:** `Inter` para UI e `Fira Code` para fragmentos de código.
 
-Barra de Progresso: Indicador visual de posição na fila atual (ex: "5 / 20").
+---
 
-3. 📊 Dashboard & Métricas
-Visualização de dados para monitoramento de consistência e progresso.
+## ☁️ Infraestrutura Backend
+- **Authentication:** Login via E-mail/Senha e modo Convidado.
+- **Firestore Database:** Arquitetura de coleções otimizada para isolamento de dados (`users/{uid}/reviews`).
 
-Heatmap de Consistência:
+---
 
-Gráfico estilo GitHub que visualiza a atividade dos últimos 30 dias.
-
-Gradiente de cores dinâmico (do azul escuro ao esmeralda brilhante) baseado na intensidade de revisões diárias.
-
-Leaderboard (Ranking Global):
-
-Sistema de classificação em tempo real consultando o Firestore.
-
-Métricas de rankeamento: Retenção (%), XP Total (Cartas estudadas) e Tempo de Estudo.
-
-Distinção visual para o Top 1 (Ícone de Coroa) e badges de performance (Retenção > 80%).
-
-Estatísticas Rápidas: Contador de Cards Totais vs. Cards Memorizados no cabeçalho.
-
-4. 🛠️ Painel Administrativo (God Mode)
-Ferramentas de gestão de conteúdo restritas a usuários com privilégios.
-
-Controle de Acesso: Verificação de e-mail (domínio @userpro.com) para liberar a visualização do painel.
-
-CRUD de Cards:
-
-Criação, Leitura, Atualização e Exclusão de flashcards diretamente na interface.
-
-Persistência imediata no Firestore.
-
-Editor de Texto Rico (WYSIWYG):
-
-Editor customizado permitindo formatação: Negrito, Itálico, Listas e Blocos de Código (essencial para CS).
-
-Suporte a injeção de HTML no conteúdo do card.
-
-Filtros e Organização:
-
-Sistema de filtragem por "Deck" (Categoria) e "Tópico" (Subcategoria).
-
-Autocomplete (datalist) para sugestão de categorias já existentes ao criar novos cards.
-
-5. 🎨 UI/UX & Design System
-Estética visual "Cyberpunk/Dev" focada em imersão e redução de fadiga visual.
-
-Tema Dark Mode: Paleta de cores baseada em Slate-950 (fundo), Blue-500 (primária) e Purple-500 (accent).
-
-Glassmorphism: Utilização de transparências, blur de fundo (backdrop-filter) e bordas sutis nos containers de cards e modais.
-
-Tipografia: Fonte Inter para interface geral e Fira Code (Monospaced) para trechos de código.
-
-Micro-interações:
-
-Animações de entrada (fade-in, slide-up).
-
-Efeitos de Hover e Scale em botões e cards.
-
-Feedback de carregamento (Spinner de CPU).
-
-6. ☁️ Infraestrutura Backend (Firebase)
-Authentication: Login via E-mail/Senha e modo "Convidado".
-
-Firestore Database:
-
-Coleção cards: Armazena o conteúdo global de estudo.
-
-Coleção users/{uid}/reviews: Armazena o progresso individual de cada usuário (isolamento de dados).
-
-Coleção leaderboard: Agrega estatísticas para o ranking público.
+<p align="center">
+  <sub>Desenvolvido para excelência em Ciência da Computação.</sub>
+</p>
