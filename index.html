@@ -64,6 +64,35 @@
         .prose { text-align: center; max-width: 100%; }
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        
+        /* Estilização para checkboxes customizados no Admin */
+        .admin-checkbox {
+            appearance: none;
+            background-color: #1e293b;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 1px solid #475569;
+            border-radius: 0.25em;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .admin-checkbox::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em white;
+            background-color: transform-origin;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+        .admin-checkbox:checked { background-color: #3b82f6; border-color: #3b82f6; }
+        .admin-checkbox:checked::before { transform: scale(1); }
     </style>
 </head>
 
@@ -76,9 +105,8 @@
         // --- IMPORTS FIREBASE & ICONS ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        // Importante: writeBatch adicionado para operações NoSQL complexas em bloco
         import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -364,7 +392,6 @@
             );
         };
 
-        // Componentes StudySession, DeckTable, AuthScreen e Leaderboard mantidos e otimizados da versão anterior
         const StudySession = ({ initialQueue, user, reviews, setReviews, userStats, setUserStats, onFinish }) => {
             const [queue, setQueue] = React.useState(initialQueue);
             const [index, setIndex] = React.useState(0);
@@ -830,28 +857,36 @@
             );
         };
 
-        // --- PAINEL ADMIN AVANÇADO (COM BATCH OPERATIONS) ---
+        // --- PAINEL ADMIN UNIFICADO COM MASSA DE DADOS ---
         const AdminPanel = ({ cards, onExit }) => {
-            const [activeTab, setActiveTab] = React.useState('cards'); // 'cards' ou 'structure'
-            
-            // --- ESTADOS DA ABA DE CARDS ---
+            // ESTADOS DO FORMULÁRIO SIMPLES
             const [form, setForm] = React.useState({ front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] });
             const [tagInput, setTagInput] = React.useState('');
             const [editingId, setEditingId] = React.useState(null);
             
+            // ESTADOS DE FILTRO
             const [filterCategory, setFilterCategory] = React.useState('Todos');
             const [filterLesson, setFilterLesson] = React.useState('Todos');
             const [filterSubcategory, setFilterSubcategory] = React.useState('Todos');
             const [filterTag, setFilterTag] = React.useState('Todas');
             const [searchTerm, setSearchTerm] = React.useState('');
+
+            // ESTADOS DE SELEÇÃO EM MASSA
+            const [selectedCardIds, setSelectedCardIds] = React.useState(new Set());
             
-            // Opções globais inferidas dos cards
+            // ESTADOS DO FORMULÁRIO DE LOTE (BULK)
+            const [bulkForm, setBulkForm] = React.useState({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] });
+            const [bulkTagAddInput, setBulkTagAddInput] = React.useState('');
+            const [bulkTagRemoveInput, setBulkTagRemoveInput] = React.useState('');
+            const [isBulkProcessing, setIsBulkProcessing] = React.useState(false);
+            
+            // OPÇÕES GLOBAIS
             const existingCategories = [...new Set(cards.map(c => normalize(c.category)))].filter(Boolean).sort();
             const existingLessons = [...new Set(cards.map(c => normalize(c.lesson || 'Conteúdo Geral')))].filter(Boolean).sort();
             const existingSubcategories = [...new Set(cards.map(c => normalize(c.subcategory || 'Geral')))].filter(Boolean).sort();
             const existingAdminTags = [...new Set(cards.flatMap(c => c.tags || []))].filter(Boolean).sort();
 
-            // Filtragem de cards
+            // FILTRAGEM
             const filteredCards = cards.filter(c => {
                 const cCat = normalize(c.category).toLowerCase();
                 const cLess = normalize(c.lesson || 'Conteúdo Geral').toLowerCase();
@@ -871,7 +906,118 @@
                 return matchCategory && matchLesson && matchSubcategory && matchTag && matchSearch;
             });
 
-            // Handlers aba de Cards
+            const allFilteredSelected = filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id));
+
+            // --- FUNÇÕES DE SELEÇÃO ---
+            const handleToggleSelection = (id) => {
+                const newSelection = new Set(selectedCardIds);
+                if (newSelection.has(id)) newSelection.delete(id);
+                else newSelection.add(id);
+                setSelectedCardIds(newSelection);
+            };
+
+            const handleToggleAllFiltered = () => {
+                if (allFilteredSelected) {
+                    const newSelection = new Set(selectedCardIds);
+                    filteredCards.forEach(c => newSelection.delete(c.id));
+                    setSelectedCardIds(newSelection);
+                } else {
+                    const newSelection = new Set(selectedCardIds);
+                    filteredCards.forEach(c => newSelection.add(c.id));
+                    setSelectedCardIds(newSelection);
+                }
+            };
+
+            // --- FUNÇÕES DE LOTE (BULK EDIT) ---
+            const handleAddBulkTagAdd = (e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const newTag = bulkTagAddInput.trim().toLowerCase();
+                    if (newTag && !bulkForm.tagsToAdd.includes(newTag)) setBulkForm(prev => ({ ...prev, tagsToAdd: [...prev.tagsToAdd, newTag] }));
+                    setBulkTagAddInput('');
+                }
+            };
+            const handleAddBulkTagRemove = (e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const newTag = bulkTagRemoveInput.trim().toLowerCase();
+                    if (newTag && !bulkForm.tagsToRemove.includes(newTag)) setBulkForm(prev => ({ ...prev, tagsToRemove: [...prev.tagsToRemove, newTag] }));
+                    setBulkTagRemoveInput('');
+                }
+            };
+
+            const handleBulkSubmit = async (e) => {
+                e.preventDefault();
+                if (selectedCardIds.size === 0) return;
+                
+                const idsArray = Array.from(selectedCardIds);
+                const isOnlyTags = !bulkForm.category && !bulkForm.lesson && !bulkForm.subcategory && (bulkForm.tagsToAdd.length > 0 || bulkForm.tagsToRemove.length > 0);
+                const hasChanges = bulkForm.category || bulkForm.lesson || bulkForm.subcategory || bulkForm.tagsToAdd.length > 0 || bulkForm.tagsToRemove.length > 0;
+                
+                if (!hasChanges) {
+                    alert("Você não definiu nenhuma modificação para os cards selecionados.");
+                    return;
+                }
+
+                if (!confirm(`Você está prestes a modificar simultaneamente ${idsArray.length} flashcards.\nEssa operação não pode ser desfeita facilmente. Confirmar execução em lote?`)) return;
+
+                setIsBulkProcessing(true);
+
+                // O Firebase possui limite de 500 operações por batch, então fatiamos em pedaços de 450 para segurança
+                const chunkSize = 450;
+                let processedCount = 0;
+
+                for (let i = 0; i < idsArray.length; i += chunkSize) {
+                    const chunk = idsArray.slice(i, i + chunkSize);
+                    const batch = writeBatch(db);
+
+                    chunk.forEach(cardId => {
+                        const card = cards.find(c => c.id === cardId);
+                        if (!card) return;
+
+                        const updateData = {};
+                        if (bulkForm.category.trim()) updateData.category = normalize(bulkForm.category);
+                        if (bulkForm.lesson.trim()) updateData.lesson = normalize(bulkForm.lesson);
+                        if (bulkForm.subcategory.trim()) updateData.subcategory = normalize(bulkForm.subcategory);
+
+                        let currentTags = [...(card.tags || [])];
+                        let tagsChanged = false;
+
+                        if (bulkForm.tagsToAdd.length > 0) {
+                            const beforeLen = currentTags.length;
+                            currentTags = [...new Set([...currentTags, ...bulkForm.tagsToAdd])];
+                            if (currentTags.length !== beforeLen) tagsChanged = true;
+                        }
+                        if (bulkForm.tagsToRemove.length > 0) {
+                            const beforeLen = currentTags.length;
+                            currentTags = currentTags.filter(t => !bulkForm.tagsToRemove.includes(t));
+                            if (currentTags.length !== beforeLen) tagsChanged = true;
+                        }
+
+                        if (tagsChanged) updateData.tags = currentTags;
+
+                        if (Object.keys(updateData).length > 0) {
+                            batch.update(doc(db, "cards", cardId), updateData);
+                            processedCount++;
+                        }
+                    });
+
+                    try {
+                        await batch.commit();
+                    } catch (err) {
+                        alert("Erro grave na execução do lote. Apenas processou " + processedCount + " de " + idsArray.length + ".\nErro: " + err.message);
+                        setIsBulkProcessing(false);
+                        return;
+                    }
+                }
+
+                setIsBulkProcessing(false);
+                setSelectedCardIds(new Set()); // Limpa seleção após sucesso
+                setBulkForm({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] }); // Limpa o formulário de lote
+            };
+
+
+            // --- FUNÇÕES FORMULÁRIO SIMPLES ---
             const handleAddTag = (e) => {
                 if (e.key === 'Enter' || e.key === ',') {
                     e.preventDefault();
@@ -880,10 +1026,7 @@
                     setTagInput('');
                 }
             };
-
-            const removeTag = (tagToRemove) => {
-                setForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
-            };
+            const removeTag = (tagToRemove) => setForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
 
             const handleSaveCard = async (e) => {
                 e.preventDefault();
@@ -908,6 +1051,11 @@
             };
 
             const handleEditCard = (card) => { 
+                // Se estiver no modo lote, um clique num card pode apenas marca-lo ou desmarca-lo para facilitar
+                if (selectedCardIds.size > 0) {
+                    handleToggleSelection(card.id);
+                    return;
+                }
                 setForm({
                     front: card.front, back: card.back,
                     category: normalize(card.category), lesson: normalize(card.lesson || 'Conteúdo Geral'),
@@ -916,181 +1064,192 @@
                 setEditingId(card.id); 
             };
             
-            const handleDeleteCard = async (id) => { 
+            const handleDeleteCard = async (id, e) => { 
+                e.stopPropagation();
                 if(confirm("Deletar este card de forma irreversível?")) await deleteDoc(doc(db, "cards", id)); 
             };
 
-            // --- LÓGICA DA ABA DE ESTRUTURA (BATCH OPERATIONS) ---
-            const getStructureTree = () => {
-                const tree = {};
-                cards.forEach(c => {
-                    const cat = normalize(c.category || 'Geral');
-                    const les = normalize(c.lesson || 'Conteúdo Geral');
-                    const sub = normalize(c.subcategory || 'Geral');
-                    if(!tree[cat]) tree[cat] = { count: 0, lessons: {} };
-                    if(!tree[cat].lessons[les]) tree[cat].lessons[les] = { count: 0, subcategories: {} };
-                    if(!tree[cat].lessons[les].subcategories[sub]) tree[cat].lessons[les].subcategories[sub] = { count: 0, cards: [] };
-
-                    tree[cat].count++;
-                    tree[cat].lessons[les].count++;
-                    tree[cat].lessons[les].subcategories[sub].count++;
-                    tree[cat].lessons[les].subcategories[sub].cards.push(c);
-                });
-                return tree;
-            };
-
-            // Função robusta de Rename em Lote utilizando NoSQL writeBatch
-            const handleBulkRename = async (type, oldName, contextParams) => {
-                const newName = prompt(`Digite o novo nome para a ${type === 'category' ? 'Matéria' : type === 'lesson' ? 'Aula' : 'Tópico'} "${oldName}":`, oldName);
-                if (!newName || normalize(newName) === normalize(oldName)) return;
-
-                const normalizedNewName = normalize(newName);
-
-                const batch = writeBatch(db);
-                let affectedCards = [];
-
-                if (type === 'category') {
-                    affectedCards = cards.filter(c => normalize(c.category || 'Geral') === normalize(oldName));
-                } else if (type === 'lesson') {
-                    affectedCards = cards.filter(c => normalize(c.category || 'Geral') === normalize(contextParams.cat) && normalize(c.lesson || 'Conteúdo Geral') === normalize(oldName));
-                } else if (type === 'subcategory') {
-                    affectedCards = cards.filter(c => normalize(c.category || 'Geral') === normalize(contextParams.cat) && normalize(c.lesson || 'Conteúdo Geral') === normalize(contextParams.les) && normalize(c.subcategory || 'Geral') === normalize(oldName));
-                }
-
-                if (affectedCards.length === 0) return;
-
-                if (!confirm(`Isso modificará ${affectedCards.length} cards instantaneamente. Tem certeza?`)) return;
-
-                affectedCards.forEach(c => {
-                    const cardRef = doc(db, 'cards', c.id);
-                    const updateData = {};
-                    if (type === 'category') updateData.category = normalizedNewName;
-                    if (type === 'lesson') updateData.lesson = normalizedNewName;
-                    if (type === 'subcategory') updateData.subcategory = normalizedNewName;
-                    batch.update(cardRef, updateData);
-                });
-
-                try {
-                    await batch.commit();
-                } catch(e) { alert("Erro ao renomear em lote: " + e.message); }
-            };
-
-            // Função robusta de Deleção em Lote utilizando NoSQL writeBatch
-            const handleBulkDelete = async (type, name, contextParams) => {
-                let affectedCards = [];
-                if (type === 'category') affectedCards = cards.filter(c => normalize(c.category || 'Geral') === normalize(name));
-                else if (type === 'lesson') affectedCards = cards.filter(c => normalize(c.category || 'Geral') === normalize(contextParams.cat) && normalize(c.lesson || 'Conteúdo Geral') === normalize(name));
-                else if (type === 'subcategory') affectedCards = cards.filter(c => normalize(c.category || 'Geral') === normalize(contextParams.cat) && normalize(c.lesson || 'Conteúdo Geral') === normalize(contextParams.les) && normalize(c.subcategory || 'Geral') === normalize(name));
-
-                if (affectedCards.length === 0) return;
-
-                if (!confirm(`ATENÇÃO DESTRUTIVA: Você está prestes a excluir a ${type === 'category' ? 'Matéria' : type === 'lesson' ? 'Aula' : 'Tópico'} "${name}".\n\nIsso DELETARÁ DEFINITIVAMENTE ${affectedCards.length} CARDS da base de dados.\n\nEssa ação não pode ser desfeita. Confirmar?`)) return;
-
-                const batch = writeBatch(db);
-                affectedCards.forEach(c => batch.delete(doc(db, 'cards', c.id)));
-
-                try {
-                    await batch.commit();
-                } catch(e) { alert("Erro ao deletar em lote: " + e.message); }
-            };
-
-            const structureTree = getStructureTree();
 
             return (
                 <div className="glass p-6 rounded-2xl border border-slate-700 min-h-screen md:h-[calc(100vh-100px)] flex flex-col shadow-2xl animate-fade-in">
+                    
+                    {/* CABEÇALHO UNIFICADO */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b border-slate-700 pb-4 flex-shrink-0 gap-4">
                         <div className="flex items-center gap-3">
                             <Lock size={20} className="text-amber-500"/>
                             <div>
-                                <h2 className="text-xl font-bold text-white leading-tight">Console Admin</h2>
+                                <h2 className="text-xl font-bold text-white leading-tight">Gestão de Flashcards</h2>
                                 <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded uppercase font-bold tracking-widest border border-emerald-500/30 flex items-center gap-1 inline-flex mt-1"><Network size={10}/> Real-time Sync Ativo</span>
                             </div>
                         </div>
-                        
-                        <div className="flex bg-slate-900/50 p-1 rounded-lg border border-slate-700/50">
-                            <button onClick={() => setActiveTab('cards')} className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'cards' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Layers size={16}/> Gestão de Cards</button>
-                            <button onClick={() => setActiveTab('structure')} className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-all ${activeTab === 'structure' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}><Folder size={16}/> Gerenciar Estrutura (Pastas)</button>
-                        </div>
-
                         <button onClick={onExit} className="hover:text-white text-slate-400 transition-colors bg-slate-800 p-2 rounded-lg self-end md:self-auto"><X size={20} /></button>
                     </div>
 
                     <div className="flex-1 overflow-hidden flex flex-col">
-                        
-                        {/* ABA: GESTÃO DE CARDS (Original Otimizada) */}
-                        {activeTab === 'cards' && (
-                            <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden h-full">
-                                {/* SIDEBAR DE LISTAGEM */}
-                                <div className="w-full md:w-1/3 flex flex-col border-b md:border-b-0 md:border-r border-slate-700/50 pb-4 md:pr-4 h-64 md:h-full">
-                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0 space-y-3">
-                                        <div className="flex items-center gap-2"><Filter size={16} className="text-slate-500" /><span className="text-xs text-slate-400 font-bold uppercase">Filtros Avançados</span></div>
-                                        
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
-                                                <option value="Todos">Todas Matérias</option>
-                                                {existingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                            </select>
-                                            <select value={filterLesson} onChange={(e) => setFilterLesson(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
-                                                <option value="Todos">Todas Aulas</option>
-                                                {existingLessons.map(l => <option key={l} value={l}>{l}</option>)}
-                                            </select>
-                                            <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
-                                                <option value="Todos">Todos Tópicos</option>
-                                                {existingSubcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                                            </select>
-                                            <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
-                                                <option value="Todas">Qualquer Tag</option>
-                                                {existingAdminTags.map(t => <option key={t} value={t}>#{t}</option>)}
-                                            </select>
-                                        </div>
-                                        
-                                        <div className="relative">
-                                            <input type="text" placeholder="Buscar no texto (frente ou verso)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 placeholder:text-slate-600"/>
-                                            <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500 pointer-events-none"/>
-                                        </div>
-                                        
-                                        <div className="flex justify-between items-center text-xs text-slate-400 font-mono">
-                                            <button onClick={() => { setFilterCategory('Todos'); setFilterLesson('Todos'); setFilterSubcategory('Todos'); setFilterTag('Todas'); setSearchTerm(''); }} className="text-blue-400 hover:text-blue-300 uppercase font-bold">Limpar</button>
-                                            <span className="font-bold bg-slate-950 px-2 py-1 rounded border border-slate-800">{filteredCards.length} Cards</span>
-                                        </div>
+                        <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden h-full">
+                            
+                            {/* COLUNA ESQUERDA: LISTAGEM E FILTROS */}
+                            <div className="w-full md:w-[45%] lg:w-1/3 flex flex-col border-b md:border-b-0 md:border-r border-slate-700/50 pb-4 md:pr-4 h-64 md:h-full">
+                                
+                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0 space-y-3">
+                                    <div className="flex items-center gap-2"><Filter size={16} className="text-slate-500" /><span className="text-xs text-slate-400 font-bold uppercase">Filtros</span></div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
+                                            <option value="Todos">Todas Matérias</option>
+                                            {existingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                        </select>
+                                        <select value={filterLesson} onChange={(e) => setFilterLesson(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
+                                            <option value="Todos">Todas Aulas</option>
+                                            {existingLessons.map(l => <option key={l} value={l}>{l}</option>)}
+                                        </select>
+                                        <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
+                                            <option value="Todos">Todos Tópicos</option>
+                                            {existingSubcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                                        </select>
+                                        <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
+                                            <option value="Todas">Qualquer Tag</option>
+                                            {existingAdminTags.map(t => <option key={t} value={t}>#{t}</option>)}
+                                        </select>
                                     </div>
-
-                                    <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                        {filteredCards.map(c => (
-                                            <div key={c.id} onClick={() => handleEditCard(c)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group ${editingId === c.id ? 'bg-blue-900/20 border-blue-500/50' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
-                                                <div className="flex justify-between items-start">
-                                                    <div className="w-full">
-                                                        <div className="flex flex-col mb-1">
-                                                            <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{c.category}</span>
-                                                            <span className="text-slate-500 text-[10px] font-bold">{c.lesson} &gt; {c.subcategory || 'Geral'}</span>
-                                                        </div>
-                                                        <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (c.front || '').replace(/<[^>]*>?/gm, '')}}></div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCard(c.id); }} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors" title="Excluir"><Trash2 size={14}/></button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                    
+                                    <div className="relative">
+                                        <input type="text" placeholder="Buscar no texto (frente ou verso)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 placeholder:text-slate-600"/>
+                                        <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500 pointer-events-none"/>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center pt-2 border-t border-slate-800 mt-2">
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={handleToggleAllFiltered} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-bold border transition-colors ${allFilteredSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}>
+                                                <ListChecks size={14} /> {allFilteredSelected ? 'Desmarcar Todos' : 'Selecionar Filtro'}
+                                            </button>
+                                        </div>
+                                        <span className="font-bold text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800 text-slate-400">{filteredCards.length} Cards</span>
                                     </div>
                                 </div>
 
-                                {/* FORMULÁRIO DE EDIÇÃO */}
-                                <div className="flex-1 overflow-y-auto pl-0 md:pl-2 custom-scrollbar pb-20 md:pb-0 h-full">
-                                     <form onSubmit={handleSaveCard} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col">
+                                {/* LISTA DE CARDS */}
+                                <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {filteredCards.map(c => {
+                                        const isSelected = selectedCardIds.has(c.id);
+                                        return (
+                                            <div key={c.id} onClick={() => handleEditCard(c)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group flex gap-3 ${isSelected ? 'bg-blue-900/30 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : editingId === c.id && selectedCardIds.size === 0 ? 'bg-slate-800 border-slate-500' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
+                                                <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); handleToggleSelection(c.id); }}>
+                                                    <input type="checkbox" className="admin-checkbox" checked={isSelected} readOnly />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-col mb-1">
+                                                        <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{c.category}</span>
+                                                        <span className="text-slate-500 text-[10px] font-bold truncate">{c.lesson} &gt; {c.subcategory || 'Geral'}</span>
+                                                    </div>
+                                                    <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (c.front || '').replace(/<[^>]*>?/gm, '')}}></div>
+                                                </div>
+                                                {selectedCardIds.size === 0 && (
+                                                    <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={(e) => handleDeleteCard(c.id, e)} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors h-fit" title="Excluir"><Trash2 size={14}/></button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {filteredCards.length === 0 && <p className="text-center text-slate-500 mt-10 text-sm">Nenhum card atende aos filtros.</p>}
+                                </div>
+                            </div>
+
+                            {/* COLUNA DIREITA: FORMULÁRIO (DINÂMICO: SIMPLES OU EM LOTE) */}
+                            <div className="flex-1 overflow-y-auto pl-0 md:pl-2 custom-scrollbar pb-20 md:pb-0 h-full">
+                                
+                                {selectedCardIds.size > 0 ? (
+                                    /* --- MODO EDIÇÃO EM MASSA (LOTE) --- */
+                                    <form onSubmit={handleBulkSubmit} className="space-y-4 bg-amber-900/10 border border-amber-500/30 p-4 rounded-xl h-full flex flex-col relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+                                        
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-amber-500 flex items-center gap-2"><CheckSquare size={20}/> Edição em Lote</h3>
+                                                <p className="text-sm text-slate-400 mt-1">Modificando <strong>{selectedCardIds.size}</strong> flashcards selecionados.</p>
+                                            </div>
+                                            <button type="button" onClick={() => setSelectedCardIds(new Set())} className="text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg text-sm transition-colors border border-slate-700">Cancelar Seleção</button>
+                                        </div>
+
+                                        <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-2 text-xs text-slate-300 flex items-start gap-3">
+                                            <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                                            <p>Qualquer campo preenchido abaixo substituirá o conteúdo atual de todos os {selectedCardIds.size} cards. <strong>Deixe o campo vazio se não quiser alterar a propriedade.</strong></p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0 border-b border-slate-800 pb-4">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Matéria para</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.category} onChange={e => setBulkForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Aula para</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.lesson} onChange={e => setBulkForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Tópico para</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.subcategory} onChange={e => setBulkForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                                            {/* ADICIONAR TAGS */}
+                                            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
+                                                <label className="text-xs font-bold text-emerald-400 uppercase ml-1 mb-2 flex items-center gap-1"><Plus size={14}/> Acoplar Novas Tags</label>
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {bulkForm.tagsToAdd.map(t => (
+                                                        <span key={t} className="bg-emerald-900/60 text-emerald-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-emerald-500/40">
+                                                            +{t} <button type="button" onClick={() => setBulkForm(prev => ({...prev, tagsToAdd: prev.tagsToAdd.filter(tag => tag !== t)}))} className="hover:text-emerald-100 transition-colors"><X size={14}/></button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: revisar, prova (Enter)" value={bulkTagAddInput} onChange={e => setBulkTagAddInput(e.target.value)} onKeyDown={handleAddBulkTagAdd} list="tag-suggestions" />
+                                            </div>
+
+                                            {/* REMOVER TAGS */}
+                                            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
+                                                <label className="text-xs font-bold text-red-400 uppercase ml-1 mb-2 flex items-center gap-1"><Trash2 size={14}/> Remover Tags Existentes</label>
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {bulkForm.tagsToRemove.map(t => (
+                                                        <span key={t} className="bg-red-900/60 text-red-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-red-500/40">
+                                                            -{t} <button type="button" onClick={() => setBulkForm(prev => ({...prev, tagsToRemove: prev.tagsToRemove.filter(tag => tag !== t)}))} className="hover:text-red-100 transition-colors"><X size={14}/></button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-red-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: desatualizado (Enter)" value={bulkTagRemoveInput} onChange={e => setBulkTagRemoveInput(e.target.value)} onKeyDown={handleAddBulkTagRemove} list="tag-suggestions" />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="pt-4 flex-shrink-0 mt-auto">
+                                            <button type="submit" disabled={isBulkProcessing} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white font-bold p-4 rounded-xl shadow-lg shadow-amber-900/20 transition-all flex justify-center gap-2 items-center text-lg">
+                                                {isBulkProcessing ? <RotateCcw className="animate-spin" size={20} /> : <Zap size={20} />} 
+                                                {isBulkProcessing ? 'Executando Transações...' : `Gravar Modificações em ${selectedCardIds.size} Cards`}
+                                            </button>
+                                        </div>
+                                    </form>
+
+                                ) : (
+
+                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (ORIGINAL) --- */
+                                    <form onSubmit={handleSaveCard} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Pencil size={18} className="text-blue-500"/>
+                                            <h3 className="text-lg font-bold text-white">{editingId ? 'Editar Card Único' : 'Criar Novo Card'}</h3>
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Matéria (Deck)</label>
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria (Deck)</label>
                                                 <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Sistemas Operacionais" value={form.category} onChange={e => setForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
                                                 <datalist id="category-suggestions">{existingCategories.map((cat, i) => <option key={i} value={cat} />)}</datalist>
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Aula (Lesson)</label>
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula (Lesson)</label>
                                                 <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Aula 01" value={form.lesson} onChange={e => setForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
                                                 <datalist id="lesson-suggestions">{existingLessons.map((l, i) => <option key={l} value={l} />)}</datalist>
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Tópico</label>
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Tópico</label>
                                                 <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Conceitos Básicos" value={form.subcategory} onChange={e => setForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
                                                 <datalist id="subcategory-suggestions">{existingSubcategories.map((sub, i) => <option key={sub} value={sub} />)}</datalist>
                                             </div>
@@ -1105,7 +1264,7 @@
                                                     </span>
                                                 ))}
                                             </div>
-                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Digite uma tag e pressione Enter" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag} list="tag-suggestions" />
+                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Digite uma tag e pressione Enter" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag} list="tag-suggestions" />
                                             <datalist id="tag-suggestions">{existingAdminTags.map((t, i) => <option key={t} value={t} />)}</datalist>
                                         </div>
 
@@ -1116,80 +1275,12 @@
                                         
                                         <div className="flex gap-3 pt-4 border-t border-slate-700 flex-shrink-0 mt-auto">
                                             {editingId && (<button type="button" onClick={() => { setEditingId(null); setForm(prev => ({ ...prev, front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] })); }} className="w-1/3 bg-slate-700 hover:bg-slate-600 text-white font-bold p-3 rounded-lg transition-colors flex items-center justify-center gap-2"><RotateCcw size={16}/> Cancelar</button>)}
-                                            <button type="submit" className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all flex justify-center gap-2 items-center">{editingId ? <><Save size={18} /> Atualizar Card</> : <><Plus size={18} /> Inserir Novo Card</>}</button>
+                                            <button type="submit" className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all flex justify-center gap-2 items-center">{editingId ? <><Save size={18} /> Atualizar Card Único</> : <><Plus size={18} /> Inserir Novo Card</>}</button>
                                         </div>
                                     </form>
-                                </div>
+                                )}
                             </div>
-                        )}
-
-                        {/* ABA: GESTÃO DE ESTRUTURA (NOVO) */}
-                        {activeTab === 'structure' && (
-                            <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-900/30 rounded-xl border border-slate-700 p-4">
-                                <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-xl">
-                                    <h3 className="text-amber-500 font-bold flex items-center gap-2 mb-2"><AlertCircle size={18}/> Operações em Lote (Batch Operations)</h3>
-                                    <p className="text-slate-300 text-sm">Ao renomear ou excluir itens nesta aba, o sistema utilizará o motor NoSQL em background para alterar automaticamente todos os Flashcards que pertencem a essa estrutura simultaneamente. A alteração será refletida em toda a interface em tempo real.</p>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {Object.keys(structureTree).sort().map(cat => (
-                                        <div key={cat} className="bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
-                                            {/* LINHA DA MATÉRIA */}
-                                            <div className="bg-slate-800/80 p-3 flex items-center justify-between group">
-                                                <div className="flex items-center gap-3">
-                                                    <Folder className="text-blue-400" size={20}/>
-                                                    <span className="font-bold text-white text-lg">{cat}</span>
-                                                    <span className="bg-slate-900 text-slate-400 px-2 py-0.5 rounded-full text-xs border border-slate-700">{structureTree[cat].count} cards</span>
-                                                </div>
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleBulkRename('category', cat)} className="p-1.5 bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white rounded transition-colors" title="Renomear Matéria (Atualiza todos os cards)"><Pencil size={14}/></button>
-                                                    <button onClick={() => handleBulkDelete('category', cat)} className="p-1.5 bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded transition-colors" title="Excluir Matéria e TODOS os cards"><Trash2 size={14}/></button>
-                                                </div>
-                                            </div>
-
-                                            {/* AULAS DENTRO DA MATÉRIA */}
-                                            <div className="pl-6 border-l-2 border-slate-700/50 ml-5 py-2 space-y-2">
-                                                {Object.keys(structureTree[cat].lessons).sort().map(les => (
-                                                    <div key={les} className="space-y-1">
-                                                        <div className="flex items-center justify-between group p-2 hover:bg-slate-700/30 rounded-lg transition-colors">
-                                                            <div className="flex items-center gap-2">
-                                                                <BookOpen className="text-orange-400" size={16}/>
-                                                                <span className="font-medium text-slate-200">{les}</span>
-                                                                <span className="text-slate-500 text-xs font-mono">({structureTree[cat].lessons[les].count})</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => handleBulkRename('lesson', les, {cat})} className="p-1 text-slate-400 hover:text-blue-400"><Pencil size={14}/></button>
-                                                                <button onClick={() => handleBulkDelete('lesson', les, {cat})} className="p-1 text-slate-400 hover:text-red-400"><Trash2 size={14}/></button>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* TÓPICOS DENTRO DA AULA */}
-                                                        <div className="pl-6 space-y-1">
-                                                            {Object.keys(structureTree[cat].lessons[les].subcategories).sort().map(sub => (
-                                                                <div key={sub} className="flex items-center justify-between group p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Layers className="text-emerald-400" size={14}/>
-                                                                        <span className="text-sm text-slate-400">{sub}</span>
-                                                                        <span className="text-slate-600 text-[10px] font-mono">({structureTree[cat].lessons[les].subcategories[sub].count})</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-                                                                        <button onClick={() => handleBulkRename('subcategory', sub, {cat, les})} className="p-1 text-slate-500 hover:text-blue-400"><Pencil size={12}/></button>
-                                                                        <button onClick={() => handleBulkDelete('subcategory', sub, {cat, les})} className="p-1 text-slate-500 hover:text-red-400"><Trash2 size={12}/></button>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {Object.keys(structureTree).length === 0 && (
-                                        <div className="text-center p-10 text-slate-500 border border-dashed border-slate-700 rounded-xl">Nenhum card cadastrado. Adicione cards na aba "Gestão de Cards" para montar sua estrutura.</div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        </div>
                     </div>
                 </div>
             );
