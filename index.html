@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L1 Cache v2.7 - CS Study System</title>
+    <title>L1 Cache v2.8 - CS Study System</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & ReactDOM -->
@@ -381,7 +381,7 @@
                             <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
                             <Cpu size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
                         </div>
-                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INITIALIZING L1 CACHE v2.7</span>
+                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INITIALIZING L1 CACHE v2.8</span>
                     </div>
                 );
             }
@@ -396,7 +396,7 @@
                                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
                                     <Cpu size={20} className="text-white" />
                                 </div>
-                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.7</span></span>
+                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.8</span></span>
                             </div>
                             <div className="flex items-center gap-4">
                                 {user && <button onClick={() => setView("leaderboard")} className="text-yellow-500 flex items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking</button>}
@@ -442,7 +442,7 @@
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
                             <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><Cpu size={32} /></div>
-                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.7</span></h1>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.8</span></h1>
                             <p className="text-slate-400 text-sm">Latência zero para seu aprendizado.</p>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -712,36 +712,44 @@
                 }
             };
 
-            // --- NOVA FUNCIONALIDADE: BATCH RENAME ---
+            // --- NOVA FUNCIONALIDADE: BATCH RENAME (CORRIGIDA) ---
             const handleBatchRename = async () => {
                 if (filterLesson === 'Todos') return alert("Selecione uma aula específica no filtro para renomear em massa.");
-                const newName = prompt(`ATENÇÃO: Isso irá mover TODOS os ${filteredCards.length} cards da aula "${filterLesson}" para uma nova aula.\n\nDigite o novo nome da aula:`, filterLesson);
+                
+                const newName = prompt(`Renomear a aula "${filterLesson}" para:`, filterLesson);
                 
                 if (!newName || newName === filterLesson || newName.trim() === '') return;
-                
-                const confirmMsg = `Tem certeza absoluta? Isso afetará ${filteredCards.length} cards no banco de dados.`;
-                if (!confirm(confirmMsg)) return;
-
                 const normalizedNewName = normalize(newName);
 
+                // Confirmação com detalhes
+                const confirmMsg = `Confirmar ALTERAÇÃO NO BANCO DE DADOS:\n\nDe: "${filterLesson}"\nPara: "${normalizedNewName}"\n\nAfetará ${filteredCards.length} cards.`;
+                if (!confirm(confirmMsg)) return;
+
                 try {
-                    // Atualiza no Firestore em background (Batch write for better performance/reliability)
-                    // Note: Firestore batch limit is 500. Se tiver mais, teria que dividir. 
-                    // Como é um app de estudo pessoal, assumindo < 500 por lote.
-                    const updates = filteredCards.map(c => {
-                        return updateDoc(doc(db, "cards", c.id), { lesson: normalizedNewName });
+                    // Usar Batch para garantir atomicidade (tudo ou nada)
+                    const batch = writeBatch(db);
+                    let count = 0;
+
+                    filteredCards.forEach(c => {
+                        const ref = doc(db, "cards", c.id);
+                        // Força a atualização do campo lesson
+                        batch.update(ref, { lesson: normalizedNewName });
+                        count++;
                     });
-                    await Promise.all(updates);
+
+                    // Commit da transação
+                    await batch.commit();
                     
-                    // FORÇA RECARREGAMENTO DO SERVIDOR
-                    // Isso previne o bug do "F5" onde o estado local mente sobre o estado remoto
+                    // Recarrega dados do servidor para confirmar a mudança visualmente
                     await loadPublicCards(); 
                     
+                    // Atualiza o filtro para a nova aula para o usuário não ficar perdido
                     setFilterLesson(normalizedNewName); 
-                    alert("Atualização em massa salva no servidor com sucesso!");
+                    
+                    alert(`SUCESSO REAL: ${count} cards foram atualizados no banco de dados para "${normalizedNewName}".`);
                 } catch (err) {
-                    console.error(err);
-                    alert("Erro CRÍTICO ao salvar no banco: " + err.message + "\nVerifique o console.");
+                    console.error("Erro Batch:", err);
+                    alert("ERRO AO SALVAR: " + err.message + "\n\nVerifique sua conexão e permissões.");
                 }
             };
 
