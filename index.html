@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L1 Cache v2.5 - CS Study System</title>
+    <title>L1 Cache v2.6 - CS Study System</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & ReactDOM -->
@@ -66,7 +66,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, getDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, where, increment, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Edit3 } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -267,15 +267,16 @@
                 try {
                     const q = query(collection(db, "cards"));
                     const snapshot = await getDocs(q);
-                    // Normalização de dados na carga: Converte categorias númericas para string
+                    // --- CORREÇÃO DE BUG ---
+                    // Adicionado .trim() para garantir que "4 " e "4" sejam tratados como a mesma coisa
                     const loadedCards = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
                             id: doc.id, 
                             ...data,
-                            category: String(data.category || 'Sem Categoria'),
-                            lesson: String(data.lesson || 'Conteúdo Geral'),
-                            subcategory: String(data.subcategory || 'Geral')
+                            category: String(data.category || 'Sem Categoria').trim(),
+                            lesson: String(data.lesson || 'Conteúdo Geral').trim(),
+                            subcategory: String(data.subcategory || 'Geral').trim()
                         };
                     });
                     setCards(loadedCards);
@@ -380,7 +381,7 @@
                             <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
                             <Cpu size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
                         </div>
-                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INITIALIZING L1 CACHE v2.5</span>
+                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INITIALIZING L1 CACHE v2.6</span>
                     </div>
                 );
             }
@@ -395,7 +396,7 @@
                                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
                                     <Cpu size={20} className="text-white" />
                                 </div>
-                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.5</span></span>
+                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.6</span></span>
                             </div>
                             <div className="flex items-center gap-4">
                                 {user && <button onClick={() => setView("leaderboard")} className="text-yellow-500 flex items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking</button>}
@@ -414,7 +415,7 @@
                         )}
                         {view === "study" && <StudySession queue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} onFinish={() => setView("decks")} />}
                         {view === "leaderboard" && <LeaderboardView />}
-                        {view === "admin" && isAdmin && <AdminPanel cards={cards} setCards={setCards} onExit={() => setView("decks")} />}
+                        {view === "admin" && isAdmin && <AdminPanel cards={cards} setCards={setCards} onExit={() => setView("decks")} db={db} />}
                     </main>
                 </div>
             );
@@ -441,7 +442,7 @@
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
                             <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><Cpu size={32} /></div>
-                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.5</span></h1>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.6</span></h1>
                             <p className="text-slate-400 text-sm">Latência zero para seu aprendizado.</p>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -659,7 +660,7 @@
             );
         };
 
-        const AdminPanel = ({ cards, setCards, onExit }) => {
+        const AdminPanel = ({ cards, setCards, onExit, db }) => {
             const [form, setForm] = React.useState({ front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '' });
             const [editingId, setEditingId] = React.useState(null);
             
@@ -669,13 +670,11 @@
             const [filterSubcategory, setFilterSubcategory] = React.useState('Todos');
             const [searchTerm, setSearchTerm] = React.useState('');
             
-            // Correção Cirúrgica: Normalizar todas as categorias para String e remover duplicatas e valores nulos
             const normalize = (val) => String(val || '').trim();
             const existingCategories = [...new Set(cards.map(c => normalize(c.category)))].filter(Boolean).sort();
             const existingLessons = [...new Set(cards.map(c => normalize(c.lesson)))].filter(Boolean).sort();
             const existingSubcategories = [...new Set(cards.map(c => normalize(c.subcategory)))].filter(Boolean).sort();
             
-            // Lógica de Filtragem Corrigida com Type Casting Explícito
             const filteredCards = cards.filter(c => {
                 const cCat = normalize(c.category);
                 const cLess = normalize(c.lesson || 'Conteúdo Geral');
@@ -689,11 +688,45 @@
                 return matchCategory && matchLesson && matchSubcategory && matchSearch;
             });
 
+            // --- NOVA FUNCIONALIDADE: BATCH RENAME ---
+            const handleBatchRename = async () => {
+                if (filterLesson === 'Todos') return alert("Selecione uma aula específica no filtro para renomear em massa.");
+                const newName = prompt(`ATENÇÃO: Isso irá mover TODOS os ${filteredCards.length} cards da aula "${filterLesson}" para uma nova aula.\n\nDigite o novo nome da aula:`, filterLesson);
+                
+                if (!newName || newName === filterLesson || newName.trim() === '') return;
+                
+                const confirmMsg = `Tem certeza absoluta? Isso afetará ${filteredCards.length} cards.`;
+                if (!confirm(confirmMsg)) return;
+
+                const normalizedNewName = normalize(newName);
+
+                try {
+                    // Atualiza localmente primeiro para feedback instantâneo
+                    const updatedCards = cards.map(c => {
+                        if (normalize(c.lesson) === filterLesson) {
+                            return { ...c, lesson: normalizedNewName };
+                        }
+                        return c;
+                    });
+                    setCards(updatedCards);
+                    setFilterLesson(normalizedNewName); // Atualiza o filtro para não perder de vista
+
+                    // Atualiza no Firestore em background
+                    const updates = filteredCards.map(c => {
+                        return updateDoc(doc(db, "cards", c.id), { lesson: normalizedNewName });
+                    });
+                    await Promise.all(updates);
+                    alert("Atualização em massa concluída com sucesso!");
+                } catch (err) {
+                    alert("Erro ao atualizar no banco de dados: " + err.message);
+                    // Opcional: Recarregar página se falhar muito
+                }
+            };
+
             const handleSave = async (e) => {
                 e.preventDefault();
                 if(!form.front || !form.back) return;
                 try {
-                    // Sanitização na Salva: Força String em tudo
                     const dataToSave = {
                         front: form.front,
                         back: form.back,
@@ -710,12 +743,11 @@
                         const ref = await addDoc(collection(db, "cards"), { ...dataToSave, createdAt: serverTimestamp() });
                         setCards([...cards, { id: ref.id, ...dataToSave }]);
                     }
-                    setForm({ ...form, front: '', back: '' }); // Mantém categoria/aula para inserção em massa
+                    setForm({ ...form, front: '', back: '' }); 
                 } catch (e) { alert("Erro ao salvar: " + e.message); }
             };
 
             const handleEdit = (card) => { 
-                // Carregar garantindo conversão de tipos
                 setForm({
                     front: card.front,
                     back: card.back,
@@ -747,6 +779,14 @@
                                         <option value="Todos">Todas Aulas</option>
                                         {existingLessons.map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
+                                    
+                                    {/* BOTÃO DE CORREÇÃO EM MASSA */}
+                                    {filterLesson !== 'Todos' && (
+                                        <button onClick={handleBatchRename} className="w-full bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-600/50 p-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all">
+                                            <Edit3 size={12}/> Renomear Aula "{filterLesson}" em Massa
+                                        </button>
+                                    )}
+
                                     <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500 transition-colors">
                                         <option value="Todos">Todos Tópicos</option>
                                         {existingSubcategories.map(s => <option key={s} value={s}>{s}</option>)}
