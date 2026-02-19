@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L1 Cache v2.1 (Anki Engine)</title>
+    <title>L1 Cache v2.2 (Anki Fixed)</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -115,9 +115,8 @@
                     newInterval = 1; // 1 minuto
                     newPhase = 'learning'; 
                 } else if (rating === 2) { // Difícil (Hard)
-                    // No Anki, Hard em learning não avança o passo, apenas repete com média ou intervalo fixo um pouco maior
+                    // No Anki, Hard em learning não avança o passo
                     newInterval = 6; // 6 minutos
-                    // Mantém o step e a fase
                 } else if (rating === 3) { // Bom (Good)
                     if (step === 0) {
                         newStep = 1;
@@ -125,12 +124,12 @@
                     } else {
                         // Terminou os passos de learning -> Gradua
                         newPhase = 'review';
-                        newInterval = 1440; // 1 dia (Graduating interval)
+                        newInterval = 1440; // 1 dia
                         newStep = 0;
                     }
                 } else if (rating === 4) { // Fácil (Easy)
                     newPhase = 'review';
-                    newInterval = 4 * 1440; // 4 dias (Easy interval)
+                    newInterval = 4 * 1440; // 4 dias
                     newStep = 0;
                 }
             } 
@@ -142,18 +141,19 @@
                     newInterval = 10; // Passo de reaprendizado
                     newEase = Math.max(1.3, ease - 0.2); // Penalidade no Ease (-20%)
                 } else if (rating === 2) { // Difícil (Hard)
-                    newInterval = Math.floor(interval * 1.2); // Intervalo cresce devagar (1.2x)
-                    newEase = Math.max(1.3, ease - 0.15); // Ease cai um pouco (-15%)
+                    newInterval = Math.floor(interval * 1.2); 
+                    newEase = Math.max(1.3, ease - 0.15); 
                 } else if (rating === 3) { // Bom (Good)
-                    newInterval = Math.floor(interval * ease); // Intervalo normal (x Ease)
-                    // Ease mantém
+                    newInterval = Math.floor(interval * ease);
                 } else if (rating === 4) { // Fácil (Easy)
-                    newInterval = Math.floor(interval * ease * 1.3); // Bônus (x Ease x 1.3)
-                    newEase = ease + 0.15; // Bônus no Ease (+15%)
+                    newInterval = Math.floor(interval * ease * 1.3);
+                    newEase = ease + 0.15;
                 }
             }
 
-            // Conversão para Data
+            // Garante que o intervalo mínimo seja respeitado
+            if (newInterval < 1) newInterval = 1;
+
             const now = new Date();
             const dueDate = new Date(now.getTime() + newInterval * 60000);
 
@@ -223,19 +223,34 @@
         };
 
         const StudySession = ({ initialQueue, user, reviews, setReviews, onFinish }) => {
-            // Fila dinâmica. No Anki, a fila é reordenada baseada no tempo.
-            // Aqui, ao invés de 'index', removemos sempre o item 0 e reinserimos se necessário.
-            const [queue, setQueue] = React.useState(initialQueue.map(c => ({
-                ...c,
-                // Garante que o card tenha uma data de "agora" se não tiver, para ordenação inicial
-                tempDueDate: c.tempReviewData?.dueDate || new Date()
-            })));
+            // Inicialização Robusta da Fila
+            const [queue, setQueue] = React.useState(() => {
+                return initialQueue.map(c => {
+                    // Tenta obter a data de revisão real do histórico ou usa "agora" para cartões novos
+                    // IMPORTANTE: Isso garante que cartões atrasados tenham datas antigas e venham primeiro
+                    const rev = reviews[c.id];
+                    let sortDate = new Date(); // Default para novos: Agora
+                    
+                    if (rev && rev.dueDate) {
+                        // Se tem review, usa a data de vencimento real (pode ser no passado)
+                        sortDate = rev.dueDate.toDate ? rev.dueDate.toDate() : new Date(rev.dueDate);
+                    } else {
+                        // Se é novo, damos um pequeno "jitter" para não ficarem todos com o mesmo milissegundo exato
+                        sortDate = new Date(Date.now() + Math.random() * 1000); 
+                    }
+
+                    return {
+                        ...c,
+                        tempDueDate: sortDate
+                    };
+                }).sort((a, b) => a.tempDueDate - b.tempDueDate); // Ordenação inicial crítica
+            });
             
             const [isFlipped, setIsFlipped] = React.useState(false);
             const [startTime, setStartTime] = React.useState(Date.now());
             
-            // Se a fila estiver vazia, acabou
-            if (queue.length === 0) {
+            // Verificação de segurança para renderização
+            if (!queue || queue.length === 0) {
                  return (
                     <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-fade-in">
                         <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-6 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><Check size={48} /></div>
@@ -246,13 +261,16 @@
                 );
             }
 
-            // O cartão atual é sempre o primeiro da fila
             const currentCard = queue[0];
             
-            // Dados atuais do card (Review data global ou temporário da sessão)
+            // Segurança extra: se currentCard for undefined (erro de estado), renderiza fim
+            if (!currentCard) {
+                onFinish();
+                return null;
+            }
+
             const currentReviewData = currentCard.tempReviewData || reviews[currentCard.id] || { interval: 0, ease: 2.5, phase: 'learning', step: 0 };
 
-            // Opções futuras (Previsão do Anki)
             const options = { 
                 1: calculateAnkiNextReview(1, currentReviewData), 
                 2: calculateAnkiNextReview(2, currentReviewData), 
@@ -265,37 +283,34 @@
                 setStartTime(Date.now());
                 const result = options[rating];
 
-                // Lógica de Persistência e Fila
-                const isShortTerm = result.interval < 1440; // Menor que 1 dia = Continua na sessão
+                // Menor que 1440 min (1 dia) -> Mantém na sessão
+                const isShortTerm = result.interval < 1440; 
 
                 if (isShortTerm) {
-                    // MANTÉM NA SESSÃO
                     const updatedCard = {
                         ...currentCard,
-                        tempReviewData: result, // Guarda o estado atualizado (step, phase)
-                        tempDueDate: result.dueDate // Para ordenação
+                        tempReviewData: result,
+                        tempDueDate: result.dueDate // Data futura (ex: agora + 10 min)
                     };
 
-                    // Remove o atual (índice 0) e insere o atualizado
                     setQueue(prev => {
-                        const remaining = prev.slice(1);
-                        const newQueue = [...remaining, updatedCard];
-                        // REORDENA POR DATA DE VENCIMENTO (Anki Behavior)
-                        // Cards vencidos ou com data menor aparecem primeiro
-                        return newQueue.sort((a, b) => a.tempDueDate - b.tempDueDate);
+                        const others = prev.slice(1); // Remove o atual do topo
+                        const nextQueue = [...others, updatedCard];
+                        
+                        // REORDENAÇÃO CRÍTICA:
+                        // Cards atrasados (data < agora) ficam no topo.
+                        // O card atual (data futura) vai para baixo.
+                        return nextQueue.sort((a, b) => a.tempDueDate - b.tempDueDate);
                     });
-
                 } else {
-                    // GRADUOU OU É REVISÃO FUTURA -> REMOVE DA SESSÃO
+                    // Remove da sessão (Vencimento > 1 dia)
                     setQueue(prev => prev.slice(1));
                     
-                    // Salva no Banco de Dados
                     if (user) {
                         const newReviews = { ...reviews, [currentCard.id]: { ...result, dueDate: { toDate: () => result.dueDate }, lastReviewed: { toDate: () => new Date() } } };
                         setReviews(newReviews);
                         try {
                             await setDoc(doc(db, `users/${user.uid}/reviews/${currentCard.id}`), { ...result, lastReviewed: serverTimestamp() });
-                            // Stats simples
                             const statsRef = doc(db, 'leaderboard', user.uid);
                             await setDoc(statsRef, { email: user.email, timeStudied: increment(timeSpent), lastActive: serverTimestamp() }, { merge: true });
                         } catch(e) { console.error("Erro ao salvar:", e); }
@@ -320,11 +335,11 @@
                 };
                 window.addEventListener('keydown', handleKeyDown);
                 return () => window.removeEventListener('keydown', handleKeyDown);
-            }, [isFlipped, queue]); // Importante depender da queue para pegar o card certo
+            }, [isFlipped, queue]); // Dependência da queue crucial para pegar o card certo
 
             return (
                 <div className="max-w-3xl mx-auto mt-4 h-[80vh] flex flex-col perspective-1000 relative">
-                    {/* Barra de Progresso Invertida (Quantos faltam) */}
+                    {/* Barra de Progresso */}
                     <div className="flex justify-between items-center text-xs text-slate-500 uppercase tracking-widest mb-4 px-2">
                          <div className="flex items-center gap-2"><span className="bg-slate-900 px-2 py-1 rounded text-blue-400 border border-slate-800">{currentCard.category}</span></div>
                          <div className="flex items-center gap-2"><Layers size={14} className="text-slate-600"/><span>{queue.length} pendentes</span></div>
@@ -474,6 +489,7 @@
                         let dueDate;
                         if (review.dueDate && typeof review.dueDate.toDate === 'function') dueDate = review.dueDate.toDate();
                         else dueDate = new Date(review.dueDate || now);
+                        // Filtra apenas se já venceu ou vence agora
                         return dueDate <= now;
                     });
                 } else {
@@ -485,19 +501,13 @@
                     return;
                 }
                 
-                // ORDENA POR DATA DE VENCIMENTO (Mesmo lógica do Anki)
-                // Cards atrasados primeiro, depois novos (randomizados)
+                // Pré-ordenação
                 queue.sort((a, b) => {
                     const revA = reviews[a.id];
                     const revB = reviews[b.id];
-                    
-                    // Se nenhum tem review (ambos novos), randomiza
                     if (!revA && !revB) return Math.random() - 0.5;
-                    // Se um é novo e o outro não, o velho (vencido) vem primeiro
                     if (revA && !revB) return -1;
                     if (!revA && revB) return 1;
-
-                    // Ambos tem review, ordena por data
                     const dateA = revA.dueDate.toDate ? revA.dueDate.toDate() : new Date(revA.dueDate);
                     const dateB = revB.dueDate.toDate ? revB.dueDate.toDate() : new Date(revB.dueDate);
                     return dateA - dateB;
@@ -514,7 +524,7 @@
                             <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
                             <Cpu size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
                         </div>
-                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">CARREGANDO ENGINE ANKI v2.1</span>
+                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">CARREGANDO ENGINE ANKI v2.2</span>
                     </div>
                 );
             }
@@ -529,7 +539,7 @@
                                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
                                     <Cpu size={20} className="text-white" />
                                 </div>
-                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.1</span></span>
+                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.2</span></span>
                             </div>
                             <div className="flex items-center gap-4">
                                 {user && <button onClick={() => setView("leaderboard")} className="text-yellow-500 flex items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking</button>}
@@ -545,8 +555,8 @@
                                 <DecksView structure={getDecksStructure()} startStudy={startStudy} totalCards={cards.length} reviews={reviews} />
                             </>
                         )}
-                        {/* A Fila agora é gerenciada internamente pela StudySession para reordenação dinâmica */}
-                        {view === "study" && <StudySession initialQueue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} onFinish={() => setView("decks")} />}
+                        {/* A Chave (key) força a recriação do componente quando a fila muda ou iniciamos um novo estudo */}
+                        {view === "study" && <StudySession key={studyQueue.length + '-' + Date.now()} initialQueue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} onFinish={() => setView("decks")} />}
                         {view === "leaderboard" && <LeaderboardView />}
                         {view === "admin" && isAdmin && <AdminPanel cards={cards} setCards={setCards} onExit={() => setView("decks")} />}
                     </main>
@@ -575,7 +585,7 @@
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
                             <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><Cpu size={32} /></div>
-                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.1</span></h1>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.2</span></h1>
                             <p className="text-slate-400 text-sm">Engine Anki Completa.</p>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
