@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L1 Cache v2.7 - CS Study System</title>
+    <title>L1 Cache v2.8 - CS Study System</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -30,6 +30,7 @@
                         'flip': 'flip 0.6s forwards',
                         'fade-in': 'fadeIn 0.5s ease-in-out',
                         'slide-up': 'slideUp 0.4s ease-out',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                     },
                     keyframes: {
                         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
@@ -75,7 +76,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, getDocs, getDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, where, increment, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -90,8 +91,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // --- FUNÇÃO DE LIMPEZA DE DADOS (CORREÇÃO DO ADMIN) ---
-        // Isso garante que "Sistemas" seja igual a "Sistemas " nos filtros
         const normalize = (val) => String(val || '').trim();
 
         // --- ERROR BOUNDARY ---
@@ -111,24 +110,27 @@
             }
         }
 
-        // --- ENGINE ANKI (SM-2) ---
+        // --- ENGINE ANKI (SM-2 ADAPTADO) ---
         const calculateNextReview = (rating, currentData) => {
             const interval = currentData?.interval || 0;
             const ease = currentData?.ease || 2.5;
             const state = currentData?.state || 'learning';
             let newInterval = 0, newEase = ease, newState = state;
 
+            // Lógica de Intervalos (em minutos)
             if (state === 'learning') {
-                if (rating === 1) { newInterval = 5; newState = 'learning'; }
-                else if (rating === 2) { newInterval = 10; newState = 'learning'; }
-                else if (rating === 3) { newInterval = 15; if (interval >= 15) { newInterval = 1440; newState = 'graduated'; } } 
-                else if (rating === 4) { newInterval = 1440; newState = 'graduated'; }
+                if (rating === 1) { newInterval = 5; newState = 'learning'; } // Errei: volta em 5 min
+                else if (rating === 2) { newInterval = 10; newState = 'learning'; } // Difícil: volta em 10 min
+                else if (rating === 3) { newInterval = 20; if (interval >= 15) { newInterval = 1440; newState = 'graduated'; } } // Bom: 20 min ou 1 dia
+                else if (rating === 4) { newInterval = 1440; newState = 'graduated'; } // Fácil: 1 dia
             } else {
-                if (rating === 1) { newInterval = 10; newEase = Math.max(1.3, ease - 0.2); newState = 'learning'; }
+                // Graduated logic
+                if (rating === 1) { newInterval = 10; newEase = Math.max(1.3, ease - 0.2); newState = 'learning'; } // Lapse
                 else if (rating === 2) { newInterval = Math.floor(interval * 1.2); newEase = Math.max(1.3, ease - 0.15); newState = 'graduated'; }
                 else if (rating === 3) { newInterval = Math.floor(interval * ease); newState = 'graduated'; }
                 else if (rating === 4) { newInterval = Math.floor(interval * ease * 1.3); newEase = ease + 0.15; newState = 'graduated'; }
             }
+            
             const now = new Date();
             const dueDate = new Date(now.getTime() + newInterval * 60000);
             return { interval: newInterval, ease: newEase, state: newState, dueDate: dueDate };
@@ -200,7 +202,6 @@
         const RichTextEditor = ({ value, onChange }) => {
             const editorRef = React.useRef(null);
             
-            // Correção: Atualiza o conteúdo apenas se for diferente para não resetar o cursor
             React.useEffect(() => {
                 if (editorRef.current && editorRef.current.innerHTML !== value) {
                     editorRef.current.innerHTML = value || '';
@@ -266,6 +267,149 @@
             );
         };
 
+        // --- STUDY SESSION (CORE MODIFICATION FOR ANKI BEHAVIOR) ---
+        const StudySession = ({ initialQueue, user, reviews, setReviews, onFinish }) => {
+            // Local state for queue to allow appending items dynamically
+            const [queue, setQueue] = React.useState(initialQueue);
+            const [index, setIndex] = React.useState(0);
+            const [isFlipped, setIsFlipped] = React.useState(false);
+            const [finished, setFinished] = React.useState(false);
+            const [cardStartTime, setCardStartTime] = React.useState(Date.now());
+            const [requeueNotice, setRequeueNotice] = React.useState(null);
+
+            // Progress based on completed cards vs total cards currently in queue
+            const progress = queue.length > 0 ? ((index) / queue.length) * 100 : 100;
+
+            const handleUndo = () => {
+                if (finished) { setFinished(false); setIndex(queue.length - 1); setIsFlipped(true); } 
+                else if (index > 0) { setIndex(index - 1); setIsFlipped(true); }
+            };
+
+            React.useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); handleUndo(); return; }
+                    if (finished) return;
+                    if (e.code === 'Space') { if (!isFlipped) setIsFlipped(true); e.preventDefault(); } 
+                    else if (isFlipped) {
+                         if (e.key === '1') handleRate(1);
+                         if (e.key === '2') handleRate(2);
+                         if (e.key === '3') handleRate(3);
+                         if (e.key === '4') handleRate(4);
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [isFlipped, finished, index, queue]); // Added queue dependency
+
+            if (finished || queue.length === 0) {
+                return (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-fade-in relative">
+                        <div className="absolute top-0 left-0 w-full p-4 flex justify-start"><button onClick={handleUndo} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 border border-slate-700 text-sm"><Undo2 size={16} /> Desfazer Último</button></div>
+                        <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-6 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><Check size={48} /></div>
+                        <h2 className="text-3xl font-bold text-white mb-2">Buffer Limpo</h2>
+                        <p className="text-slate-400 mb-8">Sessão completa. Nenhum card pendente para curto prazo.</p>
+                        <button onClick={onFinish} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg border border-slate-700">Voltar ao Root</button>
+                    </div>
+                );
+            }
+
+            const card = queue[index];
+            // Use local override review data if available (for cards re-queued in this session), else use global reviews
+            const currentData = card.tempReviewData || reviews[card.id] || { interval: 0, ease: 2.5, state: 'learning' };
+            
+            const options = { 
+                1: calculateNextReview(1, currentData), 
+                2: calculateNextReview(2, currentData), 
+                3: calculateNextReview(3, currentData), 
+                4: calculateNextReview(4, currentData) 
+            };
+
+            const handleRate = async (rating) => {
+                const timeSpent = Date.now() - cardStartTime;
+                setCardStartTime(Date.now());
+                const result = calculateNextReview(rating, currentData);
+
+                // --- ANKI LOGIC IMPLEMENTATION ---
+                // Se o intervalo for <= 20 minutos, o card continua na sessão (Fila de Aprendizado)
+                const isShortTerm = result.interval <= 20;
+
+                if (isShortTerm) {
+                    // Clone the card and attach the NEW scheduling data so next time it appears it has the updated state
+                    const requeuedCard = {
+                        ...card,
+                        tempReviewData: result // Armazena estado temporário para a sessão
+                    };
+                    
+                    // Adiciona ao final da fila
+                    setQueue(prev => [...prev, requeuedCard]);
+                    
+                    // Feedback visual
+                    setRequeueNotice(`Reagendado para daqui a ${formatTimeLabel(result.interval)}`);
+                    setTimeout(() => setRequeueNotice(null), 3000);
+                }
+
+                if (user) {
+                    // Atualiza o estado global e DB
+                    const newReviews = { ...reviews, [card.id]: { ...result, dueDate: { toDate: () => result.dueDate }, lastReviewed: { toDate: () => new Date() } } };
+                    setReviews(newReviews);
+                    try {
+                        await setDoc(doc(db, `users/${user.uid}/reviews/${card.id}`), { ...result, lastReviewed: serverTimestamp() });
+                        
+                        // Stats only update if it's the "real" card review (not a repeat in same session) or we track time anyway
+                        const statsRef = doc(db, 'leaderboard', user.uid);
+                        // Simplificação: Atualiza XP e Tempo sempre
+                        await setDoc(statsRef, { email: user.email, timeStudied: increment(timeSpent), lastActive: serverTimestamp() }, { merge: true });
+                    } catch(e) { console.error("Erro ao salvar progresso:", e); }
+                }
+
+                setIsFlipped(false);
+                if (index < queue.length - 1) {
+                    setIndex(index + 1);
+                } else {
+                    setFinished(true);
+                }
+            };
+
+            return (
+                <div className="max-w-3xl mx-auto mt-4 h-[80vh] flex flex-col perspective-1000 relative">
+                    {requeueNotice && (
+                        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-blue-400 px-4 py-2 rounded-full border border-blue-500/30 shadow-lg text-sm font-bold animate-fade-in flex items-center gap-2">
+                            <Repeat size={14} /> {requeueNotice}
+                        </div>
+                    )}
+
+                    <div className="w-full h-1 bg-slate-800 rounded-full mb-4 overflow-hidden"><div className="h-full bg-blue-500 transition-all duration-500 ease-out shadow-[0_0_10px_#3b82f6]" style={{ width: `${progress}%` }}></div></div>
+                    <div className="flex justify-between items-center text-xs text-slate-500 uppercase tracking-widest mb-4 px-2">
+                        <div className="flex items-center gap-4">
+                            <button onClick={handleUndo} disabled={index === 0} title="Desfazer (Ctrl+Z)" className={`flex items-center gap-1 transition-colors ${index === 0 ? 'text-slate-700 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}><Undo2 size={16} /> <span className="hidden sm:inline">Desfazer</span></button>
+                            <div className="flex items-center gap-2"><span className="bg-slate-900 px-2 py-1 rounded text-blue-400 border border-slate-800">{card.category}</span><span className="text-slate-600">/</span><span className="text-slate-300">{card.lesson || 'Geral'}</span></div>
+                        </div>
+                        <div className="flex items-center gap-2"><Layers size={14} className="text-slate-600"/><span>{queue.length - index} restantes</span></div>
+                    </div>
+                    <div className="relative flex-1 group">
+                        <div className={`w-full h-full duration-500 transform-style-3d transition-transform relative ${isFlipped ? 'rotate-y-180' : ''}`}>
+                            <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center shadow-2xl overflow-hidden bg-slate-900/90">
+                                <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
+                                <div className="flex-1 w-full flex items-center justify-center overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4 flex flex-col items-center justify-center"><div className="prose prose-invert prose-lg md:prose-2xl font-medium text-white select-text w-full max-w-none leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.front || ''}}></div></div></div>
+                                <button onClick={() => setIsFlipped(true)} className="mt-6 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar</span></button>
+                            </div>
+                            <div className="absolute inset-0 backface-hidden rotate-y-180 glass border-2 border-blue-500/30 rounded-3xl p-6 md:p-8 flex flex-col items-center shadow-2xl overflow-hidden bg-slate-900/95">
+                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Resposta" onClick={(e) => { e.stopPropagation(); speakText(card.back); }}><Volume2 size={24} /></div>
+                                <div className="w-full border-b border-slate-800/80 pb-4 mb-4 text-center shrink-0"><span className="text-[10px] uppercase text-slate-600 font-bold tracking-widest block mb-1">Contexto (Pergunta)</span><div className="text-sm text-slate-400 opacity-70 line-clamp-2 px-4" dangerouslySetInnerHTML={{__html: card.front}}></div></div>
+                                <div className="flex-1 w-full overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4"><div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.back || ''}}></div></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className={`grid grid-cols-4 gap-4 mt-6 transition-all duration-300 ${isFlipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+                        <button onClick={() => handleRate(1)} className="p-4 rounded-2xl bg-slate-900 border border-red-900/30 text-red-400 hover:bg-red-900/20 hover:border-red-500/50 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-red-900/50 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 1</span><span className="font-bold text-sm mb-1 group-hover:text-red-300">Errei</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[1].interval)}</span></button>
+                        <button onClick={() => handleRate(2)} className="p-4 rounded-2xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-slate-700 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 2</span><span className="font-bold text-sm mb-1 group-hover:text-white">Difícil</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[2].interval)}</span></button>
+                        <button onClick={() => handleRate(3)} className="p-4 rounded-2xl bg-slate-900 border border-blue-900/30 text-blue-400 hover:bg-blue-900/20 hover:border-blue-500/50 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-blue-900/50 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 3</span><span className="font-bold text-sm mb-1 group-hover:text-blue-300">Bom</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[3].interval)}</span></button>
+                        <button onClick={() => handleRate(4)} className="p-4 rounded-2xl bg-slate-900 border border-emerald-900/30 text-emerald-400 hover:bg-emerald-900/20 hover:border-emerald-500/50 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-emerald-900/50 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 4</span><span className="font-bold text-sm mb-1 group-hover:text-emerald-300">Fácil</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[4].interval)}</span></button>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
             const [user, setUser] = React.useState(null);
             const [isAdmin, setIsAdmin] = React.useState(false);
@@ -295,7 +439,6 @@
                 try {
                     const q = query(collection(db, "cards"));
                     const snapshot = await getDocs(q);
-                    // Normalização de dados na carga: Converte categorias para string limpa
                     const loadedCards = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
@@ -408,7 +551,7 @@
                             <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
                             <Cpu size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
                         </div>
-                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INITIALIZING L1 CACHE v2.7</span>
+                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INITIALIZING L1 CACHE v2.8</span>
                     </div>
                 );
             }
@@ -423,7 +566,7 @@
                                 <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
                                     <Cpu size={20} className="text-white" />
                                 </div>
-                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.7</span></span>
+                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400 align-top">v2.8</span></span>
                             </div>
                             <div className="flex items-center gap-4">
                                 {user && <button onClick={() => setView("leaderboard")} className="text-yellow-500 flex items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking</button>}
@@ -440,7 +583,8 @@
                                 <CustomStudyModal isOpen={customStudyOpen} onClose={() => setCustomStudyOpen(false)} onStart={startCustomStudy} categories={[...new Set(cards.map(c => normalize(c.category)))]} />
                             </>
                         )}
-                        {view === "study" && <StudySession queue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} onFinish={() => setView("decks")} />}
+                        {/* Note: Pass studyQueue as initialQueue so StudySession can manage its own internal queue state */}
+                        {view === "study" && <StudySession initialQueue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} onFinish={() => setView("decks")} />}
                         {view === "leaderboard" && <LeaderboardView />}
                         {view === "admin" && isAdmin && <AdminPanel cards={cards} setCards={setCards} onExit={() => setView("decks")} />}
                     </main>
@@ -469,7 +613,7 @@
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
                             <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><Cpu size={32} /></div>
-                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.7</span></h1>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">2.8</span></h1>
                             <p className="text-slate-400 text-sm">Latência zero para seu aprendizado.</p>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -592,101 +736,6 @@
             );
         };
 
-        const StudySession = ({ queue, user, reviews, setReviews, onFinish }) => {
-            const [index, setIndex] = React.useState(0);
-            const [isFlipped, setIsFlipped] = React.useState(false);
-            const [finished, setFinished] = React.useState(false);
-            const [cardStartTime, setCardStartTime] = React.useState(Date.now());
-            const progress = queue.length > 0 ? ((index) / queue.length) * 100 : 100;
-            const handleUndo = () => {
-                if (finished) { setFinished(false); setIndex(queue.length - 1); setIsFlipped(true); } 
-                else if (index > 0) { setIndex(index - 1); setIsFlipped(true); }
-            };
-            React.useEffect(() => {
-                const handleKeyDown = (e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); handleUndo(); return; }
-                    if (finished) return;
-                    if (e.code === 'Space') { if (!isFlipped) setIsFlipped(true); e.preventDefault(); } 
-                    else if (isFlipped) {
-                         if (e.key === '1') handleRate(1);
-                         if (e.key === '2') handleRate(2);
-                         if (e.key === '3') handleRate(3);
-                         if (e.key === '4') handleRate(4);
-                    }
-                };
-                window.addEventListener('keydown', handleKeyDown);
-                return () => window.removeEventListener('keydown', handleKeyDown);
-            }, [isFlipped, finished, index]);
-
-            if (finished || queue.length === 0) {
-                return (
-                    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-fade-in relative">
-                        <div className="absolute top-0 left-0 w-full p-4 flex justify-start"><button onClick={handleUndo} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 border border-slate-700 text-sm"><Undo2 size={16} /> Desfazer Último</button></div>
-                        <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-6 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><Check size={48} /></div>
-                        <h2 className="text-3xl font-bold text-white mb-2">Buffer Limpo</h2>
-                        <p className="text-slate-400 mb-8">Todos os processos de memória foram atualizados.</p>
-                        <button onClick={onFinish} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg border border-slate-700">Voltar ao Root</button>
-                    </div>
-                );
-            }
-
-            const card = queue[index];
-            const currentData = reviews[card.id] || { interval: 0, ease: 2.5, state: 'learning' };
-            const options = { 1: calculateNextReview(1, currentData), 2: calculateNextReview(2, currentData), 3: calculateNextReview(3, currentData), 4: calculateNextReview(4, currentData) };
-            const handleRate = async (rating) => {
-                if (user) {
-                    const timeSpent = Date.now() - cardStartTime;
-                    setCardStartTime(Date.now());
-                    const result = calculateNextReview(rating, currentData);
-                    const newReviews = { ...reviews, [card.id]: { ...result, dueDate: { toDate: () => result.dueDate }, lastReviewed: { toDate: () => new Date() } } };
-                    setReviews(newReviews);
-                    try {
-                        await setDoc(doc(db, `users/${user.uid}/reviews/${card.id}`), { ...result, lastReviewed: serverTimestamp() });
-                        const totalCards = Object.keys(newReviews).length;
-                        const graduatedCards = Object.values(newReviews).filter(r => r.state === 'graduated').length;
-                        const retention = totalCards === 0 ? 0 : (graduatedCards / totalCards) * 100;
-                        const statsRef = doc(db, 'leaderboard', user.uid);
-                        await setDoc(statsRef, { email: user.email, total: totalCards, retention: retention, timeStudied: increment(timeSpent), lastActive: serverTimestamp() }, { merge: true });
-                    } catch(e) { console.error("Erro ao salvar progresso:", e); }
-                }
-                setIsFlipped(false);
-                if (index < queue.length - 1) setIndex(index + 1); else setFinished(true);
-            };
-
-            return (
-                <div className="max-w-3xl mx-auto mt-4 h-[80vh] flex flex-col perspective-1000">
-                    <div className="w-full h-1 bg-slate-800 rounded-full mb-4 overflow-hidden"><div className="h-full bg-blue-500 transition-all duration-500 ease-out shadow-[0_0_10px_#3b82f6]" style={{ width: `${progress}%` }}></div></div>
-                    <div className="flex justify-between items-center text-xs text-slate-500 uppercase tracking-widest mb-4 px-2">
-                        <div className="flex items-center gap-4">
-                            <button onClick={handleUndo} disabled={index === 0} title="Desfazer (Ctrl+Z)" className={`flex items-center gap-1 transition-colors ${index === 0 ? 'text-slate-700 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}><Undo2 size={16} /> <span className="hidden sm:inline">Desfazer</span></button>
-                            <div className="flex items-center gap-2"><span className="bg-slate-900 px-2 py-1 rounded text-blue-400 border border-slate-800">{card.category}</span><span className="text-slate-600">/</span><span className="text-slate-300">{card.lesson || 'Geral'}</span></div>
-                        </div>
-                        <div className="flex items-center gap-2"><Keyboard size={14} className="text-slate-600"/><span>{index + 1} / {queue.length}</span></div>
-                    </div>
-                    <div className="relative flex-1 group">
-                        <div className={`w-full h-full duration-500 transform-style-3d transition-transform relative ${isFlipped ? 'rotate-y-180' : ''}`}>
-                            <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center shadow-2xl overflow-hidden bg-slate-900/90">
-                                <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
-                                <div className="flex-1 w-full flex items-center justify-center overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4 flex flex-col items-center justify-center"><div className="prose prose-invert prose-lg md:prose-2xl font-medium text-white select-text w-full max-w-none leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.front || ''}}></div></div></div>
-                                <button onClick={() => setIsFlipped(true)} className="mt-6 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar</span></button>
-                            </div>
-                            <div className="absolute inset-0 backface-hidden rotate-y-180 glass border-2 border-blue-500/30 rounded-3xl p-6 md:p-8 flex flex-col items-center shadow-2xl overflow-hidden bg-slate-900/95">
-                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Resposta" onClick={(e) => { e.stopPropagation(); speakText(card.back); }}><Volume2 size={24} /></div>
-                                <div className="w-full border-b border-slate-800/80 pb-4 mb-4 text-center shrink-0"><span className="text-[10px] uppercase text-slate-600 font-bold tracking-widest block mb-1">Contexto (Pergunta)</span><div className="text-sm text-slate-400 opacity-70 line-clamp-2 px-4" dangerouslySetInnerHTML={{__html: card.front}}></div></div>
-                                <div className="flex-1 w-full overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4"><div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.back || ''}}></div></div></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className={`grid grid-cols-4 gap-4 mt-6 transition-all duration-300 ${isFlipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-                        <button onClick={() => handleRate(1)} className="p-4 rounded-2xl bg-slate-900 border border-red-900/30 text-red-400 hover:bg-red-900/20 hover:border-red-500/50 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-red-900/50 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 1</span><span className="font-bold text-sm mb-1 group-hover:text-red-300">Errei</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[1].interval)}</span></button>
-                        <button onClick={() => handleRate(2)} className="p-4 rounded-2xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-slate-700 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 2</span><span className="font-bold text-sm mb-1 group-hover:text-white">Difícil</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[2].interval)}</span></button>
-                        <button onClick={() => handleRate(3)} className="p-4 rounded-2xl bg-slate-900 border border-blue-900/30 text-blue-400 hover:bg-blue-900/20 hover:border-blue-500/50 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-blue-900/50 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 3</span><span className="font-bold text-sm mb-1 group-hover:text-blue-300">Bom</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[3].interval)}</span></button>
-                        <button onClick={() => handleRate(4)} className="p-4 rounded-2xl bg-slate-900 border border-emerald-900/30 text-emerald-400 hover:bg-emerald-900/20 hover:border-emerald-500/50 flex flex-col items-center transition-all hover:scale-105 active:scale-95 group relative"><span className="absolute top-2 right-2 text-[9px] bg-emerald-900/50 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">Tecla 4</span><span className="font-bold text-sm mb-1 group-hover:text-emerald-300">Fácil</span><span className="text-[10px] opacity-60 font-mono">{formatTimeLabel(options[4].interval)}</span></button>
-                    </div>
-                </div>
-            );
-        };
-
         const AdminPanel = ({ cards, setCards, onExit }) => {
             const [form, setForm] = React.useState({ front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '' });
             const [editingId, setEditingId] = React.useState(null);
@@ -697,12 +746,10 @@
             const [filterSubcategory, setFilterSubcategory] = React.useState('Todos');
             const [searchTerm, setSearchTerm] = React.useState('');
             
-            // Correção Cirúrgica: Normalizar todas as categorias para String e remover duplicatas e valores nulos
             const existingCategories = [...new Set(cards.map(c => normalize(c.category)))].filter(Boolean).sort();
             const existingLessons = [...new Set(cards.map(c => normalize(c.lesson)))].filter(Boolean).sort();
             const existingSubcategories = [...new Set(cards.map(c => normalize(c.subcategory)))].filter(Boolean).sort();
             
-            // Lógica de Filtragem Corrigida com Type Casting Explícito
             const filteredCards = cards.filter(c => {
                 const cCat = normalize(c.category);
                 const cLess = normalize(c.lesson || 'Conteúdo Geral');
@@ -719,11 +766,10 @@
             const handleSave = async (e) => {
                 e.preventDefault();
                 if(!form.front || !form.back) {
-                     alert("Por favor, preencha a Pergunta (Frente) e a Resposta (Verso) antes de salvar.");
-                     return;
+                      alert("Por favor, preencha a Pergunta (Frente) e a Resposta (Verso) antes de salvar.");
+                      return;
                 }
                 try {
-                    // Sanitização na Salva: Força String em tudo
                     const dataToSave = {
                         front: form.front,
                         back: form.back,
@@ -740,13 +786,11 @@
                         const ref = await addDoc(collection(db, "cards"), { ...dataToSave, createdAt: serverTimestamp() });
                         setCards([...cards, { id: ref.id, ...dataToSave }]);
                     }
-                    // Mantém categoria/aula para inserção em massa, limpa apenas front/back
                     setForm(prev => ({ ...prev, front: '', back: '' })); 
                 } catch (e) { alert("Erro ao salvar: " + e.message); }
             };
 
             const handleEdit = (card) => { 
-                // Carregar garantindo conversão de tipos
                 setForm({
                     front: card.front,
                     back: card.back,
