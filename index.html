@@ -148,10 +148,16 @@
         const STARTING_EASE = 2.5; 
 
         const calculateNextReview = (rating, currentData) => {
-            let interval = currentData?.interval || 0; 
-            let ease = currentData?.ease || STARTING_EASE;
-            let state = currentData?.state || 'new'; 
-            let step = currentData?.step || 0; 
+            // BUGFIX: Força o tipo para Number e padroniza a String (evita que um "0" vire "01" e quebre o algoritmo)
+            let interval = Number(currentData?.interval) || 0; 
+            let ease = Number(currentData?.ease) || STARTING_EASE;
+            let state = String(currentData?.state || 'new').toLowerCase().trim(); 
+            let step = Number(currentData?.step) || 0; 
+
+            // Se o state ficou bizarro/corrompido no Firebase, reseta de forma segura
+            if (!['new', 'learning', 'relearning', 'review'].includes(state)) {
+                state = 'new';
+            }
 
             let newInterval = interval;
             let newEase = ease;
@@ -164,18 +170,18 @@
             if (state === 'new' || state === 'learning' || state === 'relearning') {
                 if (rating === 1) { // Errei (Again)
                     newStep = 0;
-                    dueMinutes = STEPS[0];
+                    dueMinutes = STEPS[0] || 1;
                     newState = state === 'new' ? 'learning' : state; 
                 } 
                 else if (rating === 2) { // Difícil (Hard)
-                    dueMinutes = Math.floor((STEPS[step] || STEPS[0]) * 1.5);
+                    dueMinutes = Math.floor((STEPS[step] || STEPS[0] || 1) * 1.5);
                     if (dueMinutes < 1) dueMinutes = 1;
                     newState = state === 'new' ? 'learning' : state;
                 } 
                 else if (rating === 3) { // Bom (Good)
                     if (step < STEPS.length - 1) {
                         newStep = step + 1;
-                        dueMinutes = STEPS[newStep];
+                        dueMinutes = STEPS[newStep] || 10;
                         newState = state === 'new' ? 'learning' : state;
                     } else {
                         if (state === 'relearning') {
@@ -203,7 +209,7 @@
                     newInterval = Math.max(1, Math.floor(interval * 0.2)); 
                     newState = 'relearning';
                     newStep = 0;
-                    dueMinutes = STEPS[0]; 
+                    dueMinutes = 10; // Padrão Anki 10m pra Lapse 
                 } 
                 else if (rating === 2) { // Difícil (Hard)
                     newEase = Math.max(1.3, ease - 0.15);
@@ -246,10 +252,13 @@
         };
 
         const formatTimeLabel = (result) => {
+            if (!result) return "0m";
             if (result.state === 'review') {
                 if (result.interval === 1) return '1d';
-                if (result.interval > 30) return `${Math.round(result.interval/30)}m`;
-                return `${result.interval}d`;
+                if (result.interval < 30) return `${result.interval}d`;
+                // Para não confundir com Minutos (m), agora usamos (mo) para meses e (y) para anos.
+                if (result.interval < 365) return `${Math.round(result.interval/30)}mo`;
+                return `${Math.round(result.interval/365)}y`;
             }
             if (result.dueMinutes < 60) return `${Math.round(result.dueMinutes)}m`;
             if (result.dueMinutes < 1440) return `${Math.round(result.dueMinutes/60)}h`;
@@ -288,8 +297,10 @@
             const activityMap = {};
             Object.values(reviews).forEach(r => {
                 if(r.lastReviewed) {
-                   const dateKey = r.lastReviewed.toDate ? r.lastReviewed.toDate().toISOString().split('T')[0] : new Date(r.lastReviewed).toISOString().split('T')[0];
-                   activityMap[dateKey] = (activityMap[dateKey] || 0) + 1;
+                    try {
+                        const dateKey = r.lastReviewed.toDate ? r.lastReviewed.toDate().toISOString().split('T')[0] : new Date(r.lastReviewed).toISOString().split('T')[0];
+                        activityMap[dateKey] = (activityMap[dateKey] || 0) + 1;
+                    } catch (e) {}
                 }
             });
             return (
@@ -410,37 +421,10 @@
                 setCardStartTime(Date.now());
             };
 
-            React.useEffect(() => {
-                const handleKeyDown = (e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); handleUndo(); return; }
-                    if (finished) return;
-                    if (e.code === 'Space') { if (!isFlipped) setIsFlipped(true); e.preventDefault(); } 
-                    else if (isFlipped) {
-                          if (e.key === '1') handleRate(1);
-                          if (e.key === '2') handleRate(2);
-                          if (e.key === '3') handleRate(3);
-                          if (e.key === '4') handleRate(4);
-                    }
-                };
-                window.addEventListener('keydown', handleKeyDown);
-                return () => window.removeEventListener('keydown', handleKeyDown);
-            }, [isFlipped, finished, index, queue]);
-
-            if (finished || queue.length === 0) {
-                return (
-                    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-fade-in relative">
-                        <div className="absolute top-0 left-0 w-full p-4 flex justify-start"><button onClick={handleUndo} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 border border-slate-700 text-sm"><Undo2 size={16} /> Desfazer Último</button></div>
-                        <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-6 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><Check size={48} /></div>
-                        <h2 className="text-3xl font-bold text-white mb-2">Buffer Limpo</h2>
-                        <p className="text-slate-400 mb-8">Sessão completa. Consistência é a chave para a consolidação da memória longa.</p>
-                        <button onClick={onFinish} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg border border-slate-700">Voltar ao Dashboard</button>
-                    </div>
-                );
-            }
-
             const card = queue[index];
-            const currentData = card.tempReviewData || reviews[card.id] || { interval: 0, ease: 2.5, state: 'new', step: 0 };
+            const currentData = card?.tempReviewData || (card ? reviews[card.id] : null) || { interval: 0, ease: 2.5, state: 'new', step: 0 };
             
+            // Computando opções em tempo real para os botões de resposta
             const options = { 
                 1: calculateNextReview(1, currentData), 
                 2: calculateNextReview(2, currentData), 
@@ -484,7 +468,7 @@
                         await setDoc(doc(db, `users/${user.uid}/reviews/${card.id}`), { ...result, lastReviewed: serverTimestamp() });
                     } catch(e) { console.error("Erro ao salvar card:", e); }
 
-                    const isCorrect = rating > 1;
+                    const isCorrect = rating > 1; // 2, 3, 4 são considerados acertos no SM-2
                     const todayStr = new Date().toISOString().split('T')[0];
 
                     const updatedStats = { ...userStats };
@@ -522,8 +506,40 @@
                 }
             };
 
+            React.useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); handleUndo(); return; }
+                    if (finished) return;
+                    if (e.code === 'Space') { 
+                        e.preventDefault();
+                        if (!isFlipped) setIsFlipped(true); 
+                        else handleRate(3); // QoL: Pressionar Espaço = Clica em "Bom" no modo virado
+                    } 
+                    else if (isFlipped) {
+                          if (e.key === '1') handleRate(1);
+                          if (e.key === '2') handleRate(2);
+                          if (e.key === '3') handleRate(3);
+                          if (e.key === '4') handleRate(4);
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [isFlipped, finished, index, queue]);
+
+            if (finished || queue.length === 0) {
+                return (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-fade-in relative">
+                        <div className="absolute top-0 left-0 w-full p-4 flex justify-start"><button onClick={handleUndo} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 border border-slate-700 text-sm"><Undo2 size={16} /> Desfazer Último</button></div>
+                        <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-6 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><Check size={48} /></div>
+                        <h2 className="text-3xl font-bold text-white mb-2">Buffer Limpo</h2>
+                        <p className="text-slate-400 mb-8">Sessão completa. Consistência é a chave para a consolidação da memória longa.</p>
+                        <button onClick={onFinish} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg border border-slate-700">Voltar ao Dashboard</button>
+                    </div>
+                );
+            }
+
             const getStateBadge = () => {
-                const s = currentData.state;
+                const s = String(currentData.state || 'new').toLowerCase().trim();
                 if(s === 'new') return <span className="bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-blue-500/30">Novo</span>
                 if(s === 'learning') return <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-orange-500/30">Aprendendo</span>
                 if(s === 'review') return <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-emerald-500/30">Revisão</span>
@@ -587,7 +603,7 @@
                             <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center shadow-2xl overflow-hidden bg-slate-900/90">
                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
                                 <div className="flex-1 w-full flex items-center justify-center overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4 flex flex-col items-center justify-center"><div className="prose prose-invert prose-lg md:prose-2xl font-medium text-white select-text w-full max-w-none leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.front || ''}}></div></div></div>
-                                <button onClick={() => setIsFlipped(true)} className="mt-6 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar</span></button>
+                                <button onClick={() => setIsFlipped(true)} className="mt-6 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar (Espaço)</span></button>
                             </div>
                             <div className="absolute inset-0 backface-hidden rotate-y-180 glass border-2 border-blue-500/30 rounded-3xl p-6 md:p-8 flex flex-col items-center shadow-2xl overflow-hidden bg-slate-900/95">
                                  <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Resposta" onClick={(e) => { e.stopPropagation(); speakText(card.back); }}><Volume2 size={24} /></div>
@@ -728,7 +744,7 @@
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
                             <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><Cpu size={32} /></div>
-                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">v1.2</span></h1>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">v1.3</span></h1>
                             <p className="text-slate-400 text-sm">Engine SM-2 Real-time para máxima retenção em Ciência da Computação.</p>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1391,9 +1407,11 @@
                         else dueDate = new Date(dueDate || now);
 
                         if (dueDate <= endOfToday) {
-                            if (rev.state === 'learning' || rev.state === 'relearning') isLearn = true;
-                            else if (rev.state === 'review') isReview = true;
-                            else if (rev.state === 'new') isNew = true;
+                            // Bugfix: Evita falha de contagem por inconsistência de caracteres no DB
+                            const rState = String(rev.state || '').toLowerCase().trim();
+                            if (rState === 'learning' || rState === 'relearning') isLearn = true;
+                            else if (rState === 'review') isReview = true;
+                            else if (rState === 'new' || !rState) isNew = true;
                         }
                     }
 
