@@ -1533,11 +1533,19 @@
                 let queue = cards;
                 const now = new Date();
                 
-                if (settings.category !== 'All') {
+                if (settings.category && settings.category !== 'All') {
                     queue = queue.filter(c => normalize(c.category) === normalize(settings.category));
                 }
+
+                if (settings.lesson && settings.lesson !== 'All') {
+                    queue = queue.filter(c => normalize(c.lesson || 'Conteúdo Geral') === normalize(settings.lesson));
+                }
+
+                if (settings.subcategory && settings.subcategory !== 'All') {
+                    queue = queue.filter(c => normalize(c.subcategory || 'Geral') === normalize(settings.subcategory));
+                }
                 
-                if (settings.tag !== 'All') {
+                if (settings.tag && settings.tag !== 'All') {
                     queue = queue.filter(c => (c.tags || []).includes(settings.tag));
                 }
 
@@ -1591,7 +1599,15 @@
                 
                 if (queue.length === 0) {
                     if (confirm("Você já concluiu todos os cards vencidos até este momento exato.\n\nOs cards em aprendizado que retornam daqui a pouco estarão aguardando o tempo acabar. \n\nDeseja forçar uma revisão extra de fixação agora (Modo Cram)?")) {
-                        startCustomStudy({ category: category || 'All', mode: 'cram', limit: 20, tag: 'All' });
+                        // Correção Cirúrgica: Passando 'lesson' e 'subcategory' para o estudo customizado. Aumentei o limite para 100 para garantir que pegue o tópico inteiro.
+                        startCustomStudy({ 
+                            category: category || 'All', 
+                            lesson: lesson || 'All', 
+                            subcategory: subcategory || 'All', 
+                            mode: 'cram', 
+                            limit: 100, 
+                            tag: 'All' 
+                        });
                     }
                     return;
                 }
