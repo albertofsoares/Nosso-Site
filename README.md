@@ -75,18 +75,16 @@ Suba um servidor local simples:
 Você pode simplesmente abrir o index.html no seu navegador, ou, para evitar problemas de CORS com os módulos ES6, use o Python:
 ```bash
 python -m http.server 8000
-
+```
 Acesse:
+```bash
 Abra http://localhost:8000 no seu navegador.
-
+```
 (Nota: Certifique-se de configurar as suas variáveis de ambiente do Firebase no arquivo de configuração correspondente).
 
 <div align="center">
 <sub>
 <b>Desenvolvido por e para estudantes de Ciência da Computação.</b>
-
-
-
 Nascido da necessidade real de contornar desafios acadêmicos, lapsos de memória e a busca pela excelência nos estudos de base tecnológica.
 </sub>
 </div>
