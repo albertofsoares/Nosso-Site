@@ -68,7 +68,7 @@ Graças à arquitetura *zero-build*, rodar o L1 Cache é instantâneo. Nenhuma i
 
 1. **Clone o repositório:**
    ```bash
-   git clone [https://github.com/seu-usuario/l1-cache.git](https://github.com/seu-usuario/l1-cache.git)
+   git clone [https://github.com/albertofsoares/l1-cache.git](https://github.com/albertofsoares/l1-cache.git)
    cd l1-cache
 
 Suba um servidor local simples:
