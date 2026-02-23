@@ -116,6 +116,15 @@
         // NORMALIZAÇÃO AGRESSIVA: Evita inconsistências de nomenclatura no NoSQL
         const normalize = (val) => String(val || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
 
+        // FIX 1: Função robusta para pegar a data LOCAL (Ignora UTC)
+        // Isso impede que o ranking resete 3h mais cedo (ex: 21h no Brasil = 00h em Londres/UTC)
+        const getLocalDateString = (dateObj = new Date()) => {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
         // --- MOTOR DE ÁUDIO SINTÉTICO (SFX) ---
         const AudioEngine = (function() {
             let audioCtx = null;
@@ -377,7 +386,7 @@
         
         // Componente estatístico que substitui o antigo Heatmap para ficar idêntico ao Anki nativo
         const DailyStatsSummary = ({ userStats }) => {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getLocalDateString();
             const cardsSeenToday = (userStats?.dailyActivity && userStats.dailyActivity[todayStr]) || 0;
             const timeStudiedTodayMs = (userStats?.dailyTime && userStats.dailyTime[todayStr]) || 0;
 
@@ -556,7 +565,7 @@
                     } catch(e) { console.error("Erro ao salvar card:", e); }
 
                     const isCorrect = rating > 1;
-                    const todayStr = new Date().toISOString().split('T')[0];
+                    const todayStr = getLocalDateString(); // Correção do Timezone: Pega data estritamente local
 
                     const updatedStats = { ...userStats };
                     updatedStats.timeStudied = (updatedStats.timeStudied || 0) + timeSpent;
@@ -571,12 +580,18 @@
                     
                     updatedStats.retention = (updatedStats.correctAnswers / updatedStats.cardsSeen) * 100;
                     
-                    // --- ATUALIZAÇÕES DIÁRIAS (HOJE) ---
+                    // --- ATUALIZAÇÕES DIÁRIAS CIRÚRGICAS ---
                     updatedStats.dailyActivity = updatedStats.dailyActivity || {};
                     updatedStats.dailyActivity[todayStr] = (updatedStats.dailyActivity[todayStr] || 0) + 1;
 
                     updatedStats.dailyTime = updatedStats.dailyTime || {};
                     updatedStats.dailyTime[todayStr] = (updatedStats.dailyTime[todayStr] || 0) + timeSpent;
+
+                    // Adiciona controle preciso de retenção estritamente diária
+                    updatedStats.dailyCorrect = updatedStats.dailyCorrect || {};
+                    if (isCorrect) {
+                        updatedStats.dailyCorrect[todayStr] = (updatedStats.dailyCorrect[todayStr] || 0) + 1;
+                    }
 
                     setUserStats(updatedStats);
 
@@ -858,7 +873,7 @@
             );
         };
 
-        const LeaderboardView = () => {
+        const LeaderboardView = ({ isAdmin }) => {
             const [leaders, setLeaders] = React.useState([]);
             const [loading, setLoading] = React.useState(true);
             
@@ -869,7 +884,7 @@
                 for (let i = 0; i < 31; i++) {
                     const targetDate = new Date(today);
                     targetDate.setDate(targetDate.getDate() - i);
-                    const dateStr = targetDate.toISOString().split('T')[0];
+                    const dateStr = getLocalDateString(targetDate); // Correção Timezone também aqui
                     if (dailyActivity[dateStr]) {
                         total += dailyActivity[dateStr];
                     }
@@ -877,24 +892,46 @@
                 return total;
             };
 
+            const handleDeleteUser = async (userId, userEmail) => {
+                if (confirm(`ADMIN: Tem certeza absoluta que deseja excluir o usuário ${userEmail} do ranking diário? Isso apagará o progresso visível dele na tabela permanentemente.`)) {
+                    try {
+                        await deleteDoc(doc(db, 'leaderboard', userId));
+                        alert('Usuário removido do ranking com sucesso.');
+                    } catch (e) {
+                        alert("Erro ao remover: " + e.message);
+                    }
+                }
+            };
+
             React.useEffect(() => {
                 const q = query(collection(db, 'leaderboard'));
                 const unsub = onSnapshot(q, (snap) => {
-                    const todayStr = new Date().toISOString().split('T')[0];
+                    const todayStr = getLocalDateString(); // Correção: Pega data estritamente local
                     
                     const fetchedLeaders = snap.docs.map(d => {
                         const data = d.data();
+                        
+                        // Extração Diária
+                        const cardsSeenToday = (data.dailyActivity && data.dailyActivity[todayStr]) || 0;
+                        const timeStudiedToday = (data.dailyTime && data.dailyTime[todayStr]) || 0;
+                        const correctToday = (data.dailyCorrect && data.dailyCorrect[todayStr]) || 0;
+                        
+                        // Retenção cirúrgica diária
+                        const dailyRetention = cardsSeenToday > 0 ? (correctToday / cardsSeenToday) * 100 : 0;
+
                         return {
+                            id: d.id, // Importante para o DeleteAdmin
+                            email: data.email,
                             ...data,
-                            // Busca estritamente a atividade de hoje para o ranqueamento
-                            cardsSeenToday: (data.dailyActivity && data.dailyActivity[todayStr]) || 0,
-                            timeStudiedToday: (data.dailyTime && data.dailyTime[todayStr]) || 0,
-                            retention: data.retention || 0,
+                            cardsSeenToday: cardsSeenToday,
+                            timeStudiedToday: timeStudiedToday,
+                            // Se estudou hoje, exibe retenção local. Se não, exibe global como fallback
+                            retention: cardsSeenToday > 0 ? dailyRetention : (data.retention || 0), 
                             currentStreak: data.currentStreak || 0,
                             dailyActivity: data.dailyActivity || {},
                             dailyTime: data.dailyTime || {}
                         };
-                    });
+                    }).filter(u => u.email && u.email !== 'Anônimo' && u.email.includes('@')); // REMOÇÃO E FILTRO DE ANÔNIMOS
                     
                     // Ordena com base exclusiva no que foi feito HOJE (Cards -> Retenção)
                     setLeaders(fetchedLeaders.sort((a,b) => (b.cardsSeenToday - a.cardsSeenToday) || (b.retention - a.retention)).slice(0, 50));
@@ -918,7 +955,7 @@
                             </div>
                             <div>
                                 <h2 className="text-3xl font-bold text-white tracking-tight">Leaderboard Diário <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full uppercase ml-2 align-middle shadow-[0_0_10px_rgba(239,68,68,0.5)]">Ao Vivo</span></h2>
-                                <p className="text-slate-400 text-sm mt-1">Ranking atualizado em tempo real baseado no volume e consistência <strong>de hoje</strong>.</p>
+                                <p className="text-slate-400 text-sm mt-1">Ranking atualizado em tempo real baseado no volume e retenção **exclusivos de hoje**.</p>
                             </div>
                         </div>
                     </div>
@@ -931,16 +968,17 @@
                                     <th className="p-4 md:p-5 border-b border-slate-800">Estudante</th>
                                     <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados apenas HOJE"><div className="flex items-center justify-center gap-1"><Layers size={14}/> Hoje (Cards)</div></th>
                                     <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Tempo estudado apenas HOJE"><div className="flex items-center justify-center gap-1"><Clock size={14}/> Hoje (Tempo)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1 text-orange-500"><Flame size={14}/> Streak</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados nos últimos 31 dias"><div className="flex items-center justify-center gap-1"><TrendingUp size={14}/> Últ. 31 Dias</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1"><Target size={14}/> Retenção</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Streak da sessão diária"><div className="flex items-center justify-center gap-1 text-orange-500"><Flame size={14}/> Streak</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Retenção exclusiva do dia de hoje"><div className="flex items-center justify-center gap-1"><Target size={14}/> Retenção (Diária)</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados nos últimos 31 dias"><div className="flex items-center justify-center gap-1 text-slate-500"><TrendingUp size={14}/> Últ. 31 Dias (Volume)</div></th>
+                                    {isAdmin && <th className="p-4 md:p-5 border-b border-slate-800 text-center text-red-500">Admin</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/50 transition-all">
                                 {loading ? (
-                                    <tr><td colSpan="7" className="p-8 text-center text-slate-500">Sincronizando dados ao vivo...</td></tr>
+                                    <tr><td colSpan={isAdmin ? "8" : "7"} className="p-8 text-center text-slate-500">Sincronizando dados ao vivo...</td></tr>
                                 ) : leaders.map((l, i) => (
-                                    <tr key={l.email || i} className={`transition-colors hover:bg-slate-800/40 ${i === 0 ? 'bg-yellow-500/5' : i === 1 ? 'bg-slate-400/5' : i === 2 ? 'bg-amber-700/5' : ''}`}>
+                                    <tr key={l.id} className={`transition-colors hover:bg-slate-800/40 ${i === 0 ? 'bg-yellow-500/5' : i === 1 ? 'bg-slate-400/5' : i === 2 ? 'bg-amber-700/5' : ''}`}>
                                         <td className="p-4 md:p-5 text-center font-bold text-slate-500 font-mono text-lg">
                                             {i === 0 ? <span className="text-yellow-500">1</span> : i === 1 ? <span className="text-slate-300">2</span> : i === 2 ? <span className="text-amber-600">3</span> : i+1}
                                         </td>
@@ -958,12 +996,21 @@
                                                 {l.currentStreak}
                                             </span>
                                         </td>
-                                        <td className="p-4 md:p-5 text-center text-slate-300 font-mono text-sm">{calculateLast31Days(l.dailyActivity).toLocaleString('pt-BR')}</td>
                                         <td className="p-4 md:p-5 text-center">
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold border inline-block min-w-[60px] ${l.retention > 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : l.retention > 50 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                                                 {l.retention ? l.retention.toFixed(1) : 0}%
                                             </span>
                                         </td>
+                                        <td className="p-4 md:p-5 text-center text-slate-400 font-mono text-sm">{calculateLast31Days(l.dailyActivity).toLocaleString('pt-BR')}</td>
+                                        
+                                        {/* COLUNA DE EXCLUSÃO PARA ADMIN */}
+                                        {isAdmin && (
+                                            <td className="p-4 md:p-5 text-center">
+                                                <button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500 p-2 rounded hover:bg-red-500/10 transition-colors" title="Deletar este usuário do ranking">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -1683,7 +1730,7 @@
                             </div>
                         )}
                         {view === "study" && <StudySession initialQueue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} userStats={userStats} setUserStats={setUserStats} onFinish={() => setView("decks")} />}
-                        {view === "leaderboard" && <LeaderboardView />}
+                        {view === "leaderboard" && <LeaderboardView isAdmin={isAdmin} />}
                         {view === "admin" && isAdmin && <AdminPanel cards={cards} onExit={() => setView("decks")} />}
                     </main>
                 </div>
