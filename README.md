@@ -1,4 +1,4 @@
-# 🧠 L1 Cache <span style="font-size:0.8em; color:gray;">v1.5</span>
+# 🧠 L1 Cache <span style="font-size:0.8em; color:gray;">v2.0</span>
 
 ![Version](https://img.shields.io/badge/version-2.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)
