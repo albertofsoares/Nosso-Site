@@ -96,7 +96,8 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        // ADICIONADOS ICONES PARA OS SIMULADOS (ListTodo, CheckCircle, Circle, HelpCircle, Award)
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare, ListTodo, CheckCircle, Circle, HelpCircle, Award } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -154,6 +155,14 @@
                 } else if (type === 'easy') { 
                     osc.type = 'sine'; osc.frequency.setValueAtTime(500, now); osc.frequency.setValueAtTime(650, now + 0.08); osc.frequency.setValueAtTime(800, now + 0.16);
                     gainNode.gain.setValueAtTime(0.2, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now); osc.stop(now + 0.3);
+                } else if (type === 'quiz-correct') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.setValueAtTime(800, now + 0.1); osc.frequency.setValueAtTime(1000, now + 0.2);
+                    gainNode.gain.setValueAtTime(0.2, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now); osc.stop(now + 0.4);
+                } else if (type === 'quiz-wrong') {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.3);
+                    gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
                     osc.start(now); osc.stop(now + 0.3);
                 }
             };
@@ -257,7 +266,6 @@
 
             // Injeta o perfil cognitivo dinâmico para os Learning Steps
             const ACTIVE_STEPS = PROFILES[learningProfile] || PROFILES.standard;
-            // Se for relearning, pegamos os 2 primeiros passos da escada
             const STEPS = (state === 'relearning') ? [ACTIVE_STEPS[0], ACTIVE_STEPS[1]] : ACTIVE_STEPS;
             
             let fsrsResult = fsrsCalculate({ s, d, state }, rating, lastReviewTime, fsrsRetention);
@@ -367,7 +375,6 @@
 
         // --- COMPONENTS ---
         
-        // MODAL DE CONFIGURAÇÕES GLOBAIS (FSRS vs SM-2 & Learning Profile)
         const SettingsModal = ({ isOpen, onClose, userStats, setUserStats, user }) => {
             if (!isOpen) return null;
             
@@ -399,7 +406,6 @@
                         
                         <div className="space-y-6">
                             
-                            {/* Learning Profile Toggle */}
                             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
                                 <label className="block text-slate-300 text-sm uppercase font-bold mb-3 flex items-center gap-2"><TerminalSquare size={16}/> Perfil de Neuroplasticidade (Curto Prazo)</label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -417,7 +423,6 @@
                                 </div>
                             </div>
 
-                            {/* Algorithm Toggle */}
                             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
                                 <label className="block text-slate-300 text-sm uppercase font-bold mb-3 flex items-center gap-2"><BrainCircuit size={16}/> Algoritmo de Agendamento</label>
                                 <div className="grid grid-cols-2 gap-3">
@@ -434,7 +439,6 @@
                                 </div>
                             </div>
 
-                            {/* FSRS Retention Slider */}
                             <div className={`bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 transition-opacity duration-300 ${algorithm === 'fsrs' ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="text-slate-300 text-sm uppercase font-bold flex items-center gap-2"><Target size={16}/> Retenção Desejada (FSRS)</label>
@@ -561,10 +565,8 @@
             const [cardStartTime, setCardStartTime] = React.useState(Date.now());
             const [requeueNotice, setRequeueNotice] = React.useState(null);
             
-            // v2.0: Scratchpad para Active Recall Mecânico
             const [scratchpadText, setScratchpadText] = React.useState("");
 
-            // v2.0: Focus Timer (Pomodoro) - Proteção contra Fadiga Cognitiva
             const INITIAL_FOCUS_TIME = 25 * 60; // 25 Minutos
             const [timeLeft, setTimeLeft] = React.useState(INITIAL_FOCUS_TIME);
             const [isTimerAlert, setIsTimerAlert] = React.useState(false);
@@ -576,7 +578,6 @@
             const currentRetention = userStats?.fsrsRetention || 0.90;
             const currentLearningProfile = userStats?.learningProfile || 'standard';
 
-            // Timer Logic
             React.useEffect(() => {
                 if (finished) return;
                 const timer = setInterval(() => {
@@ -687,7 +688,7 @@
                 }
 
                 setIsFlipped(false);
-                setScratchpadText(""); // Reset scratchpad for next card
+                setScratchpadText(""); 
                 
                 if (index < queue.length - 1) {
                     setIndex(index + 1);
@@ -699,9 +700,7 @@
 
             React.useEffect(() => {
                 const handleKeyDown = (e) => {
-                    // Prevenir ações de teclado se estiver focado em um input/textarea (como o scratchpad)
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                        // Permite Ctrl+Enter para virar o card rápido enquanto digita
                         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                             e.preventDefault();
                             if (!isFlipped) handleFlip();
@@ -759,7 +758,6 @@
 
                     <div className="w-full h-1 bg-slate-800 rounded-full mb-4 overflow-hidden"><div className="h-full bg-blue-500 transition-all duration-500 ease-out shadow-[0_0_10px_#3b82f6]" style={{ width: `${progress}%` }}></div></div>
                     
-                    {/* Header de Status COM FOCUS TIMER */}
                     <div className="flex justify-between items-center text-xs text-slate-500 uppercase tracking-widest mb-4 px-2">
                         <div className="flex items-center gap-4">
                             <button onClick={handleUndo} disabled={index === 0} title="Desfazer (Ctrl+Z)" className={`flex items-center gap-1 transition-colors ${index === 0 ? 'text-slate-700 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}><Undo2 size={16} /> <span className="hidden sm:inline">Desfazer</span></button>
@@ -779,26 +777,20 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            
-                            {/* Focus Timer Element */}
                             <div onClick={resetTimer} className={`flex items-center gap-1.5 px-2 py-1 rounded border font-mono font-bold cursor-pointer transition-colors ${isTimerAlert ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'}`} title="Focus Timer (Clique para resetar)">
                                 <Timer size={14} />
                                 {formatTimer(timeLeft)}
                             </div>
-
                             {getStateBadge()}
-                            
                             {userStats && userStats.currentStreak > 2 && (
                                 <div className="flex items-center gap-1 text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-orange-500/20 animate-pulse-slow">
                                     <Flame size={12} /> Streak: {userStats.currentStreak}
                                 </div>
                             )}
-
                             <div className="flex items-center gap-2 font-mono"><Layers size={14} className="text-slate-600"/><span>{queue.length - index} restantes</span></div>
                         </div>
                     </div>
                     
-                    {/* Container Principal do Card */}
                     <div className="relative flex-1 group z-10 flex flex-col">
                         <div 
                             className={`w-full flex-1 duration-500 transform-style-3d transition-all relative rounded-3xl ${isFlipped ? 'rotate-y-180' : ''}`}
@@ -806,16 +798,13 @@
                                 boxShadow: feedbackPulse.active ? `0 0 60px 10px ${feedbackPulse.color}, inset 0 0 20px ${feedbackPulse.color}` : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
                             }}
                         >
-                            {/* FRENTE */}
                             <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col overflow-hidden bg-slate-900">
                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
                                 
-                                {/* Question Content */}
                                 <div className="w-full max-h-[50%] overflow-y-auto custom-scrollbar px-2 mb-4 pb-4 border-b border-slate-800">
                                     <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center" dangerouslySetInnerHTML={{__html: card.front || ''}}></div>
                                 </div>
 
-                                {/* Active Recall Scratchpad */}
                                 <div className="flex-1 flex flex-col">
                                     <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 flex items-center gap-1"><TerminalSquare size={12}/> Evocação Ativa (Digite o que lembrar)</label>
                                     <textarea 
@@ -830,7 +819,6 @@
                                 <button onClick={handleFlip} className="mt-4 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10 w-full"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar Resposta (Espaço / Ctrl+Enter)</span></button>
                             </div>
 
-                            {/* VERSO */}
                             <div className={`absolute inset-0 backface-hidden rotate-y-180 glass border-2 border-blue-500/30 rounded-3xl p-6 md:p-8 flex flex-col items-center overflow-hidden bg-slate-900 transition-opacity duration-300 ${isFlipped ? 'opacity-100' : 'opacity-0'}`}>
                                  <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Resposta" onClick={(e) => { e.stopPropagation(); speakText(card.back); }}><Volume2 size={24} /></div>
                                 
@@ -840,7 +828,6 @@
                                 </div>
 
                                 <div className="flex-1 w-full overflow-y-auto custom-scrollbar px-2 flex flex-col gap-6">
-                                    {/* Mostrar o que o usuário tentou lembrar se o scratchpad não estiver vazio */}
                                     {scratchpadText.trim() && (
                                         <div className="w-full bg-slate-950/50 border border-slate-800 p-4 rounded-xl">
                                             <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest block mb-2">Sua Evocação:</span>
@@ -848,7 +835,6 @@
                                         </div>
                                     )}
 
-                                    {/* Resposta Real */}
                                     <div className="w-full">
                                         <span className="text-[10px] uppercase text-blue-500/50 font-bold tracking-widest block mb-2 text-center">Resposta Gabarito:</span>
                                         <div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.back || ''}}></div>
@@ -1134,7 +1120,6 @@
                                         </td>
                                         <td className="p-4 md:p-5 text-center text-slate-400 font-mono text-sm">{calculateLast31Days(l.dailyActivity).toLocaleString('pt-BR')}</td>
                                         
-                                        {/* COLUNA DE EXCLUSÃO PARA ADMIN */}
                                         {isAdmin && (
                                             <td className="p-4 md:p-5 text-center">
                                                 <button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500 p-2 rounded hover:bg-red-500/10 transition-colors" title="Deletar este usuário do ranking">
@@ -1151,7 +1136,13 @@
             );
         };
 
-        const AdminPanel = ({ cards, onExit }) => {
+        // ============================================================================
+        // ADMIN PANEL - ATUALIZADO COM ABAS (FLASHCARDS / SIMULADOS)
+        // ============================================================================
+        const AdminPanel = ({ cards, quizzes, onExit }) => {
+            const [adminTab, setAdminTab] = React.useState('flashcards'); // 'flashcards' | 'quizzes'
+
+            // --- ESTADOS FLASHCARDS ---
             const [form, setForm] = React.useState({ front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] });
             const [tagInput, setTagInput] = React.useState('');
             const [editingId, setEditingId] = React.useState(null);
@@ -1168,13 +1159,18 @@
             const [bulkTagAddInput, setBulkTagAddInput] = React.useState('');
             const [bulkTagRemoveInput, setBulkTagRemoveInput] = React.useState('');
             const [isBulkProcessing, setIsBulkProcessing] = React.useState(false);
-            
-            const existingCategories = [...new Set(cards.map(c => normalize(c.category)))].filter(Boolean).sort();
-            const existingLessons = [...new Set(cards.map(c => normalize(c.lesson || 'Conteúdo Geral')))].filter(Boolean).sort();
-            const existingSubcategories = [...new Set(cards.map(c => normalize(c.subcategory || 'Geral')))].filter(Boolean).sort();
-            const existingAdminTags = [...new Set(cards.flatMap(c => c.tags || []))].filter(Boolean).sort();
 
-            const filteredCards = cards.filter(c => {
+            // --- ESTADOS SIMULADOS ---
+            const [quizForm, setQuizForm] = React.useState({ question: '', options: ['', '', '', '', ''], correctIndex: 0, category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] });
+            const [quizEditingId, setQuizEditingId] = React.useState(null);
+            
+            const existingCategories = [...new Set([...cards, ...quizzes].map(c => normalize(c.category)))].filter(Boolean).sort();
+            const existingLessons = [...new Set([...cards, ...quizzes].map(c => normalize(c.lesson || 'Conteúdo Geral')))].filter(Boolean).sort();
+            const existingSubcategories = [...new Set([...cards, ...quizzes].map(c => normalize(c.subcategory || 'Geral')))].filter(Boolean).sort();
+            const existingAdminTags = [...new Set([...cards, ...quizzes].flatMap(c => c.tags || []))].filter(Boolean).sort();
+
+            // --- LÓGICA FILTROS (Misto para as duas abas) ---
+            const filterList = (list) => list.filter(c => {
                 const cCat = normalize(c.category).toLowerCase();
                 const cLess = normalize(c.lesson || 'Conteúdo Geral').toLowerCase();
                 const cSub = normalize(c.subcategory || 'Geral').toLowerCase();
@@ -1187,31 +1183,27 @@
                 
                 const searchLower = searchTerm.toLowerCase();
                 const matchSearch = searchTerm === '' || 
-                                    (c.front || '').toLowerCase().includes(searchLower) || 
+                                    (c.front || c.question || '').toLowerCase().includes(searchLower) || 
                                     (c.back || '').toLowerCase().includes(searchLower);
                 
                 return matchCategory && matchLesson && matchSubcategory && matchTag && matchSearch;
             });
 
-            const allFilteredSelected = filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id));
+            const filteredCards = filterList(cards);
+            const filteredQuizzes = filterList(quizzes);
 
+            // --- LÓGICA FLASHCARDS (INALTERADA) ---
+            const allFilteredSelected = filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id));
             const handleToggleSelection = (id) => {
                 const newSelection = new Set(selectedCardIds);
-                if (newSelection.has(id)) newSelection.delete(id);
-                else newSelection.add(id);
+                if (newSelection.has(id)) newSelection.delete(id); else newSelection.add(id);
                 setSelectedCardIds(newSelection);
             };
-
             const handleToggleAllFiltered = () => {
-                if (allFilteredSelected) {
-                    const newSelection = new Set(selectedCardIds);
-                    filteredCards.forEach(c => newSelection.delete(c.id));
-                    setSelectedCardIds(newSelection);
-                } else {
-                    const newSelection = new Set(selectedCardIds);
-                    filteredCards.forEach(c => newSelection.add(c.id));
-                    setSelectedCardIds(newSelection);
-                }
+                const newSelection = new Set(selectedCardIds);
+                if (allFilteredSelected) filteredCards.forEach(c => newSelection.delete(c.id));
+                else filteredCards.forEach(c => newSelection.add(c.id));
+                setSelectedCardIds(newSelection);
             };
 
             const handleAddBulkTagAdd = (e) => {
@@ -1234,19 +1226,13 @@
             const handleBulkSubmit = async (e) => {
                 e.preventDefault();
                 if (selectedCardIds.size === 0) return;
-                
                 const idsArray = Array.from(selectedCardIds);
                 const hasChanges = bulkForm.category || bulkForm.lesson || bulkForm.subcategory || bulkForm.tagsToAdd.length > 0 || bulkForm.tagsToRemove.length > 0;
                 
-                if (!hasChanges) {
-                    alert("Você não definiu nenhuma modificação para os cards selecionados.");
-                    return;
-                }
-
-                if (!confirm(`Você está prestes a modificar simultaneamente ${idsArray.length} flashcards.\nEssa operação não pode ser desfeita facilmente. Confirmar execução em lote?`)) return;
+                if (!hasChanges) { alert("Nenhuma modificação definida."); return; }
+                if (!confirm(`Modificar ${idsArray.length} flashcards?`)) return;
 
                 setIsBulkProcessing(true);
-
                 const chunkSize = 450;
                 let processedCount = 0;
 
@@ -1257,7 +1243,6 @@
                     chunk.forEach(cardId => {
                         const card = cards.find(c => c.id === cardId);
                         if (!card) return;
-
                         const updateData = {};
                         if (bulkForm.category.trim()) updateData.category = normalize(bulkForm.category);
                         if (bulkForm.lesson.trim()) updateData.lesson = normalize(bulkForm.lesson);
@@ -1276,67 +1261,57 @@
                             currentTags = currentTags.filter(t => !bulkForm.tagsToRemove.includes(t));
                             if (currentTags.length !== beforeLen) tagsChanged = true;
                         }
-
                         if (tagsChanged) updateData.tags = currentTags;
-
                         if (Object.keys(updateData).length > 0) {
                             batch.update(doc(db, "cards", cardId), updateData);
                             processedCount++;
                         }
                     });
-
-                    try {
-                        await batch.commit();
-                    } catch (err) {
-                        alert("Erro grave na execução do lote. Apenas processou " + processedCount + " de " + idsArray.length + ".\nErro: " + err.message);
-                        setIsBulkProcessing(false);
-                        return;
-                    }
+                    try { await batch.commit(); } 
+                    catch (err) { alert("Erro: " + err.message); setIsBulkProcessing(false); return; }
                 }
-
                 setIsBulkProcessing(false);
                 setSelectedCardIds(new Set()); 
                 setBulkForm({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] }); 
             };
 
-
-            const handleAddTag = (e) => {
+            const handleAddTag = (e, isQuiz = false) => {
                 if (e.key === 'Enter' || e.key === ',') {
                     e.preventDefault();
                     const newTag = tagInput.trim().toLowerCase();
-                    if (newTag && !form.tags.includes(newTag)) setForm(prev => ({ ...prev, tags: [...prev.tags, newTag] }));
+                    if (newTag) {
+                        if (isQuiz) {
+                            if(!quizForm.tags.includes(newTag)) setQuizForm(prev => ({ ...prev, tags: [...prev.tags, newTag] }));
+                        } else {
+                            if(!form.tags.includes(newTag)) setForm(prev => ({ ...prev, tags: [...prev.tags, newTag] }));
+                        }
+                    }
                     setTagInput('');
                 }
             };
-            const removeTag = (tagToRemove) => setForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
+
+            const removeTag = (tagToRemove, isQuiz = false) => {
+                if (isQuiz) setQuizForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
+                else setForm(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tagToRemove) }));
+            };
 
             const handleSaveCard = async (e) => {
                 e.preventDefault();
                 if(!form.front || !form.back) { alert("Preencha Pergunta e Resposta."); return; }
                 try {
                     const dataToSave = {
-                        front: form.front,
-                        back: form.back,
-                        category: normalize(form.category || 'Geral'),
-                        lesson: normalize(form.lesson || 'Conteúdo Geral'),
-                        subcategory: normalize(form.subcategory || 'Geral'),
-                        tags: form.tags 
+                        front: form.front, back: form.back,
+                        category: normalize(form.category || 'Geral'), lesson: normalize(form.lesson || 'Conteúdo Geral'),
+                        subcategory: normalize(form.subcategory || 'Geral'), tags: form.tags 
                     };
-                    if (editingId) {
-                        await updateDoc(doc(db, "cards", editingId), dataToSave);
-                        setEditingId(null);
-                    } else {
-                        await addDoc(collection(db, "cards"), { ...dataToSave, createdAt: serverTimestamp() });
-                    }
+                    if (editingId) { await updateDoc(doc(db, "cards", editingId), dataToSave); setEditingId(null); } 
+                    else { await addDoc(collection(db, "cards"), { ...dataToSave, createdAt: serverTimestamp() }); }
                     setForm(prev => ({ ...prev, front: '', back: '', tags: [] })); 
                 } catch (e) { alert("Erro ao salvar: " + e.message); }
             };
 
             const handleEditCard = (card) => { 
-                if (selectedCardIds.size > 0) {
-                    handleToggleSelection(card.id);
-                    return;
-                }
+                if (selectedCardIds.size > 0) { handleToggleSelection(card.id); return; }
                 setForm({
                     front: card.front, back: card.back,
                     category: normalize(card.category), lesson: normalize(card.lesson || 'Conteúdo Geral'),
@@ -1351,29 +1326,97 @@
             };
 
 
+            // --- LÓGICA SIMULADOS (NOVO) ---
+            const handleQuizOptionChange = (index, value) => {
+                const newOptions = [...quizForm.options];
+                newOptions[index] = value;
+                setQuizForm(prev => ({ ...prev, options: newOptions }));
+            };
+
+            const handleSaveQuiz = async (e) => {
+                e.preventDefault();
+                if(!quizForm.question) { alert("Preencha o enunciado da questão."); return; }
+                
+                const validOptions = quizForm.options.filter(opt => opt.trim() !== '');
+                if (validOptions.length < 2) { alert("Preencha pelo menos 2 alternativas."); return; }
+                
+                // Ensure the correct index points to a valid, non-empty option
+                if (quizForm.options[quizForm.correctIndex].trim() === '') {
+                    alert("A alternativa marcada como correta não pode estar vazia."); return;
+                }
+
+                try {
+                    const dataToSave = {
+                        question: quizForm.question,
+                        options: quizForm.options, // Save the array preserving indices
+                        correctIndex: quizForm.correctIndex,
+                        category: normalize(quizForm.category || 'Geral'),
+                        lesson: normalize(quizForm.lesson || 'Conteúdo Geral'),
+                        subcategory: normalize(quizForm.subcategory || 'Geral'),
+                        tags: quizForm.tags 
+                    };
+                    if (quizEditingId) { await updateDoc(doc(db, "quizzes", quizEditingId), dataToSave); setQuizEditingId(null); } 
+                    else { await addDoc(collection(db, "quizzes"), { ...dataToSave, createdAt: serverTimestamp() }); }
+                    
+                    setQuizForm(prev => ({ ...prev, question: '', options: ['', '', '', '', ''], correctIndex: 0, tags: [] })); 
+                } catch (e) { alert("Erro ao salvar questão: " + e.message); }
+            };
+
+            const handleEditQuiz = (quiz) => { 
+                // Ensure options array has exactly 5 elements for the UI
+                const paddedOptions = [...(quiz.options || [])];
+                while(paddedOptions.length < 5) paddedOptions.push('');
+
+                setQuizForm({
+                    question: quiz.question,
+                    options: paddedOptions.slice(0, 5),
+                    correctIndex: quiz.correctIndex !== undefined ? quiz.correctIndex : 0,
+                    category: normalize(quiz.category), lesson: normalize(quiz.lesson || 'Conteúdo Geral'),
+                    subcategory: normalize(quiz.subcategory), tags: quiz.tags || [] 
+                }); 
+                setQuizEditingId(quiz.id); 
+            };
+            
+            const handleDeleteQuiz = async (id, e) => { 
+                e.stopPropagation();
+                if(confirm("Deletar esta questão de simulado irreversivelmente?")) await deleteDoc(doc(db, "quizzes", id)); 
+            };
+
+
             return (
                 <div className="glass p-6 rounded-2xl border border-slate-700 min-h-screen md:h-[calc(100vh-100px)] flex flex-col shadow-2xl animate-fade-in">
                     
-                    {/* CABEÇALHO UNIFICADO */}
+                    {/* CABEÇALHO UNIFICADO COM ABAS */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b border-slate-700 pb-4 flex-shrink-0 gap-4">
                         <div className="flex items-center gap-3">
                             <Lock size={20} className="text-amber-500"/>
                             <div>
-                                <h2 className="text-xl font-bold text-white leading-tight">Gestão de Flashcards</h2>
+                                <h2 className="text-xl font-bold text-white leading-tight">Painel Administrador</h2>
                                 <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded uppercase font-bold tracking-widest border border-emerald-500/30 flex items-center gap-1 inline-flex mt-1"><Network size={10}/> Real-time Sync Ativo</span>
                             </div>
                         </div>
+
+                        {/* TABS DE ADMINISTRAÇÃO */}
+                        <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800 self-start md:self-auto">
+                            <button onClick={() => setAdminTab('flashcards')} className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-all ${adminTab === 'flashcards' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+                                <Layers size={16}/> Flashcards
+                            </button>
+                            <button onClick={() => setAdminTab('quizzes')} className={`px-4 py-2 rounded-md text-sm font-bold flex items-center gap-2 transition-all ${adminTab === 'quizzes' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+                                <ListTodo size={16}/> Simulados
+                            </button>
+                        </div>
+
                         <button onClick={onExit} className="hover:text-white text-slate-400 transition-colors bg-slate-800 p-2 rounded-lg self-end md:self-auto"><X size={20} /></button>
                     </div>
 
                     <div className="flex-1 overflow-hidden flex flex-col">
                         <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden h-full">
                             
-                            {/* COLUNA ESQUERDA: LISTAGEM E FILTROS */}
+                            {/* COLUNA ESQUERDA: LISTAGEM E FILTROS (Comum para ambas as abas) */}
                             <div className="w-full md:w-[45%] lg:w-1/3 flex flex-col border-b md:border-b-0 md:border-r border-slate-700/50 pb-4 md:pr-4 h-64 md:h-full">
                                 
                                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0 space-y-3">
-                                    <div className="flex items-center gap-2"><Filter size={16} className="text-slate-500" /><span className="text-xs text-slate-400 font-bold uppercase">Filtros</span></div>
+                                    <div className="flex items-center gap-2"><Filter size={16} className="text-slate-500" /><span className="text-xs text-slate-400 font-bold uppercase">Filtros Globais</span></div>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                         <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
@@ -1395,53 +1438,77 @@
                                     </div>
                                     
                                     <div className="relative">
-                                        <input type="text" placeholder="Buscar no texto (frente ou verso)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 placeholder:text-slate-600"/>
+                                        <input type="text" placeholder="Buscar no texto..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 placeholder:text-slate-600"/>
                                         <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500 pointer-events-none"/>
                                     </div>
                                     
                                     <div className="flex justify-between items-center pt-2 border-t border-slate-800 mt-2">
-                                        <div className="flex items-center gap-2">
-                                            <button onClick={handleToggleAllFiltered} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-bold border transition-colors ${allFilteredSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}>
-                                                <ListChecks size={14} /> {allFilteredSelected ? 'Desmarcar Todos' : 'Selecionar Filtro'}
-                                            </button>
-                                        </div>
-                                        <span className="font-bold text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800 text-slate-400">{filteredCards.length} Cards</span>
+                                        {adminTab === 'flashcards' ? (
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={handleToggleAllFiltered} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-bold border transition-colors ${allFilteredSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}>
+                                                    <ListChecks size={14} /> {allFilteredSelected ? 'Desmarcar Todos' : 'Selecionar Lote'}
+                                                </button>
+                                            </div>
+                                        ) : <div></div>}
+                                        <span className="font-bold text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800 text-slate-400">{adminTab === 'flashcards' ? filteredCards.length : filteredQuizzes.length} Itens</span>
                                     </div>
                                 </div>
 
-                                {/* LISTA DE CARDS */}
+                                {/* LISTA DE ITENS DEPENDENDO DA ABA */}
                                 <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                    {filteredCards.map(c => {
-                                        const isSelected = selectedCardIds.has(c.id);
-                                        return (
-                                            <div key={c.id} onClick={() => handleEditCard(c)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group flex gap-3 ${isSelected ? 'bg-blue-900/30 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : editingId === c.id && selectedCardIds.size === 0 ? 'bg-slate-800 border-slate-500' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
-                                                <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); handleToggleSelection(c.id); }}>
-                                                    <input type="checkbox" className="admin-checkbox" checked={isSelected} readOnly />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex flex-col mb-1">
-                                                        <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{c.category}</span>
-                                                        <span className="text-slate-500 text-[10px] font-bold truncate">{c.lesson} &gt; {c.subcategory || 'Geral'}</span>
+                                    {adminTab === 'flashcards' ? (
+                                        <>
+                                            {filteredCards.map(c => {
+                                                const isSelected = selectedCardIds.has(c.id);
+                                                return (
+                                                    <div key={c.id} onClick={() => handleEditCard(c)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group flex gap-3 ${isSelected ? 'bg-blue-900/30 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : editingId === c.id && selectedCardIds.size === 0 ? 'bg-slate-800 border-slate-500' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
+                                                        <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); handleToggleSelection(c.id); }}>
+                                                            <input type="checkbox" className="admin-checkbox" checked={isSelected} readOnly />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex flex-col mb-1">
+                                                                <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{c.category}</span>
+                                                                <span className="text-slate-500 text-[10px] font-bold truncate">{c.lesson} &gt; {c.subcategory || 'Geral'}</span>
+                                                            </div>
+                                                            <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (c.front || '').replace(/<[^>]*>?/gm, '')}}></div>
+                                                        </div>
+                                                        {selectedCardIds.size === 0 && (
+                                                            <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={(e) => handleDeleteCard(c.id, e)} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors h-fit" title="Excluir"><Trash2 size={14}/></button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (c.front || '').replace(/<[^>]*>?/gm, '')}}></div>
-                                                </div>
-                                                {selectedCardIds.size === 0 && (
+                                                );
+                                            })}
+                                            {filteredCards.length === 0 && <p className="text-center text-slate-500 mt-10 text-sm">Nenhum flashcard encontrado.</p>}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {filteredQuizzes.map(q => (
+                                                <div key={q.id} onClick={() => handleEditQuiz(q)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group flex gap-3 ${quizEditingId === q.id ? 'bg-slate-800 border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.1)]' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex flex-col mb-1">
+                                                            <span className="text-purple-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{q.category}</span>
+                                                            <span className="text-slate-500 text-[10px] font-bold truncate">{q.lesson} &gt; {q.subcategory || 'Geral'}</span>
+                                                        </div>
+                                                        <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (q.question || '').replace(/<[^>]*>?/gm, '')}}></div>
+                                                    </div>
                                                     <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={(e) => handleDeleteCard(c.id, e)} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors h-fit" title="Excluir"><Trash2 size={14}/></button>
+                                                        <button onClick={(e) => handleDeleteQuiz(q.id, e)} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors h-fit" title="Excluir"><Trash2 size={14}/></button>
                                                     </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    {filteredCards.length === 0 && <p className="text-center text-slate-500 mt-10 text-sm">Nenhum card atende aos filtros.</p>}
+                                                </div>
+                                            ))}
+                                            {filteredQuizzes.length === 0 && <p className="text-center text-slate-500 mt-10 text-sm">Nenhum simulado encontrado.</p>}
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* COLUNA DIREITA: FORMULÁRIO (DINÂMICO: SIMPLES OU EM LOTE) */}
+                            {/* COLUNA DIREITA: FORMULÁRIOS (DEPENDE DA ABA) */}
                             <div className="flex-1 overflow-y-auto pl-0 md:pl-2 custom-scrollbar pb-20 md:pb-0 h-full">
                                 
-                                {selectedCardIds.size > 0 ? (
-                                    /* --- MODO EDIÇÃO EM MASSA (LOTE) --- */
+                                {adminTab === 'flashcards' && selectedCardIds.size > 0 && (
+                                    /* --- MODO EDIÇÃO EM MASSA (LOTE) PARA FLASHCARDS --- */
                                     <form onSubmit={handleBulkSubmit} className="space-y-4 bg-amber-900/10 border border-amber-500/30 p-4 rounded-xl h-full flex flex-col relative overflow-hidden">
                                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
                                         
@@ -1450,12 +1517,12 @@
                                                 <h3 className="text-lg font-bold text-amber-500 flex items-center gap-2"><CheckSquare size={20}/> Edição em Lote</h3>
                                                 <p className="text-sm text-slate-400 mt-1">Modificando <strong>{selectedCardIds.size}</strong> flashcards selecionados.</p>
                                             </div>
-                                            <button type="button" onClick={() => setSelectedCardIds(new Set())} className="text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg text-sm transition-colors border border-slate-700">Cancelar Seleção</button>
+                                            <button type="button" onClick={() => setSelectedCardIds(new Set())} className="text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg text-sm transition-colors border border-slate-700">Cancelar</button>
                                         </div>
 
                                         <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-2 text-xs text-slate-300 flex items-start gap-3">
                                             <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
-                                            <p>Qualquer campo preenchido abaixo substituirá o conteúdo atual de todos os {selectedCardIds.size} cards. <strong>Deixe o campo vazio se não quiser alterar a propriedade.</strong></p>
+                                            <p>Deixe o campo vazio se não quiser alterar a propriedade. Preencher sobrescreverá todos selecionados.</p>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0 border-b border-slate-800 pb-4">
@@ -1474,7 +1541,7 @@
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-                                            {/* ADICIONAR TAGS */}
+                                            {/* ADICIONAR TAGS LOTE */}
                                             <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
                                                 <label className="text-xs font-bold text-emerald-400 uppercase ml-1 mb-2 flex items-center gap-1"><Plus size={14}/> Acoplar Novas Tags</label>
                                                 <div className="flex flex-wrap gap-2 mb-2">
@@ -1484,12 +1551,12 @@
                                                         </span>
                                                     ))}
                                                 </div>
-                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: revisar, prova (Enter)" value={bulkTagAddInput} onChange={e => setBulkTagAddInput(e.target.value)} onKeyDown={handleAddBulkTagAdd} list="tag-suggestions" />
+                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: revisar (Enter)" value={bulkTagAddInput} onChange={e => setBulkTagAddInput(e.target.value)} onKeyDown={handleAddBulkTagAdd} />
                                             </div>
 
-                                            {/* REMOVER TAGS */}
+                                            {/* REMOVER TAGS LOTE */}
                                             <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
-                                                <label className="text-xs font-bold text-red-400 uppercase ml-1 mb-2 flex items-center gap-1"><Trash2 size={14}/> Remover Tags Existentes</label>
+                                                <label className="text-xs font-bold text-red-400 uppercase ml-1 mb-2 flex items-center gap-1"><Trash2 size={14}/> Remover Tags</label>
                                                 <div className="flex flex-wrap gap-2 mb-2">
                                                     {bulkForm.tagsToRemove.map(t => (
                                                         <span key={t} className="bg-red-900/60 text-red-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-red-500/40">
@@ -1497,7 +1564,7 @@
                                                         </span>
                                                     ))}
                                                 </div>
-                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-red-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: desatualizado (Enter)" value={bulkTagRemoveInput} onChange={e => setBulkTagRemoveInput(e.target.value)} onKeyDown={handleAddBulkTagRemove} list="tag-suggestions" />
+                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-red-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: revisar (Enter)" value={bulkTagRemoveInput} onChange={e => setBulkTagRemoveInput(e.target.value)} onKeyDown={handleAddBulkTagRemove} />
                                             </div>
                                         </div>
                                         
@@ -1508,36 +1575,36 @@
                                             </button>
                                         </div>
                                     </form>
+                                )}
 
-                                ) : (
-
-                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (ORIGINAL) --- */
-                                    <form onSubmit={handleSaveCard} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col">
+                                {adminTab === 'flashcards' && selectedCardIds.size === 0 && (
+                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (FLASHCARDS) --- */
+                                    <form onSubmit={handleSaveCard} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col animate-fade-in">
                                         <div className="flex items-center gap-2 mb-2">
                                             <Pencil size={18} className="text-blue-500"/>
-                                            <h3 className="text-lg font-bold text-white">{editingId ? 'Editar Card Único' : 'Criar Novo Card'}</h3>
+                                            <h3 className="text-lg font-bold text-white">{editingId ? 'Editar Flashcard' : 'Criar Novo Flashcard'}</h3>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria (Deck)</label>
-                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Sistemas Operacionais" value={form.category} onChange={e => setForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Sistemas Operacionais" value={form.category} onChange={e => setForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
                                                 <datalist id="category-suggestions">{existingCategories.map((cat, i) => <option key={i} value={cat} />)}</datalist>
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula (Lesson)</label>
-                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Aula 01" value={form.lesson} onChange={e => setForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula / Unidade</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Aula 01" value={form.lesson} onChange={e => setForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
                                                 <datalist id="lesson-suggestions">{existingLessons.map((l, i) => <option key={l} value={l} />)}</datalist>
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Tópico</label>
-                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Conceitos Básicos" value={form.subcategory} onChange={e => setForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Conceitos Básicos" value={form.subcategory} onChange={e => setForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
                                                 <datalist id="subcategory-suggestions">{existingSubcategories.map((sub, i) => <option key={sub} value={sub} />)}</datalist>
                                             </div>
                                         </div>
                                         
                                         <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex-shrink-0">
-                                            <label className="text-xs font-bold text-purple-400 uppercase ml-1 mb-2 flex items-center gap-1"><Tag size={14}/> Indexação / Tags (Enter)</label>
+                                            <label className="text-xs font-bold text-purple-400 uppercase ml-1 mb-2 flex items-center gap-1"><Tag size={14}/> Tags (Enter)</label>
                                             <div className="flex flex-wrap gap-2 mb-2">
                                                 {form.tags.map(t => (
                                                     <span key={t} className="bg-purple-900/60 text-purple-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-purple-500/40">
@@ -1545,7 +1612,7 @@
                                                     </span>
                                                 ))}
                                             </div>
-                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Digite uma tag e pressione Enter" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag} list="tag-suggestions" />
+                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Nova tag" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => handleAddTag(e, false)} list="tag-suggestions" />
                                             <datalist id="tag-suggestions">{existingAdminTags.map((t, i) => <option key={t} value={t} />)}</datalist>
                                         </div>
 
@@ -1556,7 +1623,77 @@
                                         
                                         <div className="flex gap-3 pt-4 border-t border-slate-700 flex-shrink-0 mt-auto">
                                             {editingId && (<button type="button" onClick={() => { setEditingId(null); setForm(prev => ({ ...prev, front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] })); }} className="w-1/3 bg-slate-700 hover:bg-slate-600 text-white font-bold p-3 rounded-lg transition-colors flex items-center justify-center gap-2"><RotateCcw size={16}/> Cancelar</button>)}
-                                            <button type="submit" className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all flex justify-center gap-2 items-center">{editingId ? <><Save size={18} /> Atualizar Card Único</> : <><Plus size={18} /> Inserir Novo Card</>}</button>
+                                            <button type="submit" className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all flex justify-center gap-2 items-center">{editingId ? <><Save size={18} /> Atualizar Card</> : <><Plus size={18} /> Inserir Flashcard</>}</button>
+                                        </div>
+                                    </form>
+                                )}
+
+                                {adminTab === 'quizzes' && (
+                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (SIMULADOS) --- */
+                                    <form onSubmit={handleSaveQuiz} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col animate-fade-in">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <ListTodo size={18} className="text-purple-500"/>
+                                            <h3 className="text-lg font-bold text-white">{quizEditingId ? 'Editar Questão (Simulado)' : 'Criar Questão (Simulado)'}</h3>
+                                        </div>
+
+                                        {/* Filtros Herdados */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Sistemas Operacionais" value={quizForm.category} onChange={e => setQuizForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula / Unidade</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Aula 01" value={quizForm.lesson} onChange={e => setQuizForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Tópico</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Conceitos Básicos" value={quizForm.subcategory} onChange={e => setQuizForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex-shrink-0">
+                                            <label className="text-xs font-bold text-purple-400 uppercase ml-1 mb-2 flex items-center gap-1"><Tag size={14}/> Tags da Questão</label>
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                                {quizForm.tags.map(t => (
+                                                    <span key={t} className="bg-purple-900/60 text-purple-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-purple-500/40">
+                                                        #{t} <button type="button" onClick={() => removeTag(t, true)} className="hover:text-red-400 transition-colors"><X size={14}/></button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Nova tag" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => handleAddTag(e, true)} list="tag-suggestions" />
+                                        </div>
+
+                                        <div className="flex-1 min-h-[200px] flex flex-col gap-4">
+                                            <div className="flex-1 flex flex-col"><label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1 block">Enunciado da Questão</label>
+                                                <RichTextEditor value={quizForm.question} onChange={(val) => setQuizForm(prev => ({...prev, question: val}))} />
+                                            </div>
+                                        </div>
+
+                                        {/* Alternativas */}
+                                        <div className="flex-shrink-0 space-y-3 bg-slate-900/30 p-4 rounded-xl border border-slate-700/50">
+                                            <label className="text-xs font-bold text-slate-400 uppercase ml-1 flex items-center gap-2"><HelpCircle size={14}/> Alternativas (Mínimo 2)</label>
+                                            <p className="text-[10px] text-slate-500 ml-1 -mt-2 mb-2">Marque a bolinha ao lado da alternativa que é a resposta correta.</p>
+                                            
+                                            {[0, 1, 2, 3, 4].map(idx => (
+                                                <div key={idx} className="flex items-center gap-3">
+                                                    <button type="button" onClick={() => setQuizForm(prev => ({...prev, correctIndex: idx}))} className="mt-1 focus:outline-none transition-colors">
+                                                        {quizForm.correctIndex === idx ? <CheckCircle size={22} className="text-emerald-500 bg-emerald-500/10 rounded-full" /> : <Circle size={22} className="text-slate-600 hover:text-slate-400" />}
+                                                    </button>
+                                                    <input 
+                                                        type="text" 
+                                                        className={`flex-1 bg-slate-800 p-3 rounded-lg text-white outline-none text-sm transition-colors border ${quizForm.correctIndex === idx ? 'border-emerald-500/50 focus:border-emerald-500 bg-emerald-950/20' : 'border-slate-700 focus:border-purple-500 placeholder:text-slate-600'}`}
+                                                        placeholder={`Alternativa ${String.fromCharCode(65 + idx)} ${idx > 1 ? '(Opcional)' : ''}`} 
+                                                        value={quizForm.options[idx] || ''} 
+                                                        onChange={(e) => handleQuizOptionChange(idx, e.target.value)}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        
+                                        <div className="flex gap-3 pt-4 border-t border-slate-700 flex-shrink-0 mt-auto">
+                                            {quizEditingId && (<button type="button" onClick={() => { setQuizEditingId(null); setQuizForm(prev => ({ ...prev, question: '', options: ['', '', '', '', ''], correctIndex: 0, category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] })); }} className="w-1/3 bg-slate-700 hover:bg-slate-600 text-white font-bold p-3 rounded-lg transition-colors flex items-center justify-center gap-2"><RotateCcw size={16}/> Cancelar</button>)}
+                                            <button type="submit" className="flex-1 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-purple-900/20 transition-all flex justify-center gap-2 items-center">{quizEditingId ? <><Save size={18} /> Atualizar Questão</> : <><Plus size={18} /> Inserir Questão</>}</button>
                                         </div>
                                     </form>
                                 )}
@@ -1567,14 +1704,212 @@
             );
         };
 
+        // ============================================================================
+        // QUIZ DASHBOARD (ALUNO) - LISTAGEM PARA COMEÇAR SIMULADO
+        // ============================================================================
+        const QuizDashboard = ({ quizzes, onStartQuiz }) => {
+            
+            // Agrupar quizzes por categoria
+            const categoriesMap = {};
+            quizzes.forEach(q => {
+                const cat = normalize(q.category || 'Geral');
+                if(!categoriesMap[cat]) categoriesMap[cat] = 0;
+                categoriesMap[cat]++;
+            });
+
+            if (Object.keys(categoriesMap).length === 0) {
+                return (
+                    <div className="animate-fade-in flex flex-col items-center justify-center h-[50vh] text-center">
+                        <ListTodo size={48} className="text-slate-700 mb-4" />
+                        <h2 className="text-2xl font-bold text-white mb-2">Área de Simulados Vazia</h2>
+                        <p className="text-slate-500 max-w-md">O professor/admin ainda não publicou nenhuma questão de múltipla escolha. Retorne mais tarde.</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="animate-fade-in space-y-6">
+                    <header className="border-b border-slate-800 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3"><ListTodo className="text-purple-500"/> Simulados Práticos</h2>
+                            <p className="text-slate-400 text-sm">Pratique a discriminação de padrões. Escolha uma matéria para iniciar uma bateria de testes.</p>
+                        </div>
+                        <div className="bg-purple-900/20 text-purple-400 border border-purple-500/30 px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                            <Award size={18}/> {quizzes.length} Questões Disponíveis
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div 
+                            className="glass p-6 rounded-2xl border-2 border-purple-500/50 hover:bg-slate-800/80 hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] transition-all cursor-pointer group relative overflow-hidden flex flex-col items-center text-center"
+                            onClick={() => onStartQuiz('All')}
+                        >
+                            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-purple-500/20 to-transparent rounded-bl-full"></div>
+                            <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 mb-4 group-hover:scale-110 transition-transform"><Layers size={28}/></div>
+                            <h3 className="text-xl font-bold text-white mb-1">Simulado Global</h3>
+                            <p className="text-sm text-slate-400 mb-4">Mistura aleatória de todas as matérias disponíveis.</p>
+                            <div className="mt-auto inline-block bg-slate-900 px-3 py-1 rounded-full text-xs font-bold text-slate-300 border border-slate-700">{quizzes.length} Questões</div>
+                        </div>
+
+                        {Object.entries(categoriesMap).sort().map(([category, count]) => (
+                            <div 
+                                key={category}
+                                className="glass p-6 rounded-2xl border border-slate-700 hover:border-blue-500/50 hover:bg-slate-800/80 transition-all cursor-pointer group flex flex-col"
+                                onClick={() => onStartQuiz(category)}
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-500/20 transition-colors"><Folder size={24}/></div>
+                                    <span className="bg-slate-900 px-2 py-1 rounded-full text-xs font-bold text-slate-400 border border-slate-700">{count} Q.</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-white mb-2 line-clamp-2">{category}</h3>
+                                <p className="text-xs text-slate-500 mt-auto">Bateria focada apenas em {category}.</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )
+        };
+
+        // ============================================================================
+        // QUIZ SESSION (ALUNO) - RESPONDENDO O SIMULADO
+        // ============================================================================
+        const QuizSession = ({ queue, onFinish }) => {
+            const [index, setIndex] = React.useState(0);
+            const [selectedOption, setSelectedOption] = React.useState(null);
+            const [showExplanation, setShowExplanation] = React.useState(false);
+            const [score, setScore] = React.useState(0);
+            const [finished, setFinished] = React.useState(false);
+
+            if (finished || queue.length === 0) {
+                const percentage = queue.length > 0 ? Math.round((score / queue.length) * 100) : 0;
+                return (
+                    <div className="flex flex-col items-center justify-center h-[70vh] text-center animate-fade-in">
+                        <div className="w-24 h-24 bg-purple-500/10 rounded-full flex items-center justify-center text-purple-500 mb-6 border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.2)]"><Award size={48} /></div>
+                        <h2 className="text-3xl font-bold text-white mb-2">Simulado Concluído</h2>
+                        <p className="text-slate-400 mb-6">Você treinou a recuperação de padrões e eliminação de alternativas.</p>
+                        
+                        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl mb-8 flex gap-8 items-center justify-center shadow-inner min-w-[300px]">
+                            <div>
+                                <div className="text-sm text-slate-500 uppercase font-bold tracking-wider mb-1">Pontuação</div>
+                                <div className="text-3xl font-mono text-white">{score} <span className="text-lg text-slate-500">/ {queue.length}</span></div>
+                            </div>
+                            <div className="h-12 w-px bg-slate-800"></div>
+                            <div>
+                                <div className="text-sm text-slate-500 uppercase font-bold tracking-wider mb-1">Aproveitamento</div>
+                                <div className={`text-3xl font-mono ${percentage >= 70 ? 'text-emerald-400' : percentage >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{percentage}%</div>
+                            </div>
+                        </div>
+
+                        <button onClick={onFinish} className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20">Finalizar e Voltar</button>
+                    </div>
+                );
+            }
+
+            const currentQuestion = queue[index];
+            const validOptions = currentQuestion.options.filter(opt => opt.trim() !== '');
+            const progress = ((index) / queue.length) * 100;
+
+            const handleSelect = (optIndex) => {
+                if (showExplanation) return; // Block clicking again
+                setSelectedOption(optIndex);
+                setShowExplanation(true);
+                
+                const isCorrect = optIndex === currentQuestion.correctIndex;
+                if (isCorrect) {
+                    setScore(s => s + 1);
+                    AudioEngine.play('quiz-correct');
+                } else {
+                    AudioEngine.play('quiz-wrong');
+                }
+            };
+
+            const handleNext = () => {
+                setSelectedOption(null);
+                setShowExplanation(false);
+                if (index < queue.length - 1) {
+                    setIndex(i => i + 1);
+                } else {
+                    setFinished(true);
+                }
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto mt-4 min-h-[80vh] flex flex-col animate-fade-in">
+                    
+                    <div className="w-full h-1 bg-slate-800 rounded-full mb-6 overflow-hidden"><div className="h-full bg-purple-500 transition-all duration-500 ease-out shadow-[0_0_10px_#a855f7]" style={{ width: `${progress}%` }}></div></div>
+
+                    <div className="flex justify-between items-center text-xs text-slate-500 uppercase tracking-widest mb-6 px-2">
+                        <div className="flex flex-col items-start">
+                            <div className="flex items-center gap-2">
+                                <span className="bg-slate-900 px-2 py-1 rounded text-purple-400 border border-slate-800">{currentQuestion.category}</span>
+                                <span className="text-slate-600">/</span>
+                                <span className="text-slate-300">{currentQuestion.lesson || 'Geral'}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 font-mono"><Layers size={14}/><span>Questão {index + 1} de {queue.length}</span></div>
+                    </div>
+
+                    <div className="glass flex-1 rounded-3xl border border-slate-700 p-6 md:p-10 flex flex-col shadow-2xl bg-slate-900">
+                        
+                        {/* Enunciado */}
+                        <div className="mb-8">
+                            <div className="prose prose-invert prose-lg font-medium text-white max-w-none text-left" dangerouslySetInnerHTML={{__html: currentQuestion.question}}></div>
+                        </div>
+
+                        {/* Alternativas */}
+                        <div className="space-y-3 mt-auto">
+                            {validOptions.map((opt, idx) => {
+                                let stateClass = "bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-500 text-slate-300 cursor-pointer";
+                                let icon = <Circle size={20} className="text-slate-500 shrink-0"/>;
+
+                                if (showExplanation) {
+                                    stateClass = "bg-slate-900 border-slate-800 text-slate-500 opacity-60 cursor-default"; // Default post-answer state
+                                    
+                                    if (idx === currentQuestion.correctIndex) {
+                                        stateClass = "bg-emerald-900/30 border-emerald-500/50 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.1)] z-10 scale-[1.02] transform transition-transform";
+                                        icon = <CheckCircle size={20} className="text-emerald-400 shrink-0"/>;
+                                    } else if (idx === selectedOption) {
+                                        stateClass = "bg-red-900/30 border-red-500/50 text-red-100 z-10";
+                                        icon = <X size={20} className="text-red-400 shrink-0"/>;
+                                    }
+                                }
+
+                                return (
+                                    <div 
+                                        key={idx} 
+                                        onClick={() => handleSelect(idx)}
+                                        className={`w-full text-left p-4 rounded-xl border flex items-start gap-4 transition-all duration-300 ${stateClass}`}
+                                    >
+                                        <div className="mt-0.5">{icon}</div>
+                                        <div className="flex-1 text-sm md:text-base leading-relaxed">{opt}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Ação */}
+                        <div className={`mt-8 transition-all duration-500 flex justify-end ${showExplanation ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+                            <button onClick={handleNext} className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20 flex items-center gap-2">
+                                {index < queue.length - 1 ? 'Próxima Questão' : 'Ver Resultados'} <ChevronRight size={18}/>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )
+        };
+
+
         const App = () => {
             const [user, setUser] = React.useState(null);
             const [isAdmin, setIsAdmin] = React.useState(false);
             const [view, setView] = React.useState("loading"); 
             const [cards, setCards] = React.useState([]);
+            const [quizzes, setQuizzes] = React.useState([]); // NOVO ESTADO DE SIMULADOS
             const [reviews, setReviews] = React.useState({});
             const [userStats, setUserStats] = React.useState(null);
             const [studyQueue, setStudyQueue] = React.useState([]);
+            const [quizQueue, setQuizQueue] = React.useState([]); // FILA DO SIMULADO
             const [customStudyOpen, setCustomStudyOpen] = React.useState(false);
             const [settingsOpen, setSettingsOpen] = React.useState(false);
             
@@ -1587,7 +1922,8 @@
                         setIsAdmin(false);
                         setReviews({});
                         setUserStats(null);
-                        setCards([]); // Clear cards on logout
+                        setCards([]); 
+                        setQuizzes([]);
                     }
                     setView(currentUser ? "decks" : "auth");
                 });
@@ -1596,24 +1932,37 @@
             }, []);
 
             React.useEffect(() => {
-                if (!user) return; // Guard against unauthenticated queries
+                if (!user) return; 
 
+                // 1. Fetch Flashcards
                 const qCards = query(collection(db, "cards"));
                 const unsubCards = onSnapshot(qCards, (snapshot) => {
                     const loadedCards = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
-                            id: doc.id, 
-                            ...data,
-                            category: normalize(data.category || 'Sem Categoria'),
-                            lesson: normalize(data.lesson || 'Conteúdo Geral'),
-                            subcategory: normalize(data.subcategory || 'Geral'),
-                            tags: Array.isArray(data.tags) ? data.tags : [] 
+                            id: doc.id, ...data,
+                            category: normalize(data.category || 'Sem Categoria'), lesson: normalize(data.lesson || 'Conteúdo Geral'),
+                            subcategory: normalize(data.subcategory || 'Geral'), tags: Array.isArray(data.tags) ? data.tags : [] 
                         };
                     });
                     setCards(loadedCards);
                 }, (error) => console.error("Erro cards onSnapshot:", error));
 
+                // 2. Fetch Quizzes (NOVO)
+                const qQuizzes = query(collection(db, "quizzes"));
+                const unsubQuizzes = onSnapshot(qQuizzes, (snapshot) => {
+                    const loadedQuizzes = snapshot.docs.map(doc => {
+                        const data = doc.data();
+                        return { 
+                            id: doc.id, ...data,
+                            category: normalize(data.category || 'Sem Categoria'), lesson: normalize(data.lesson || 'Conteúdo Geral'),
+                            subcategory: normalize(data.subcategory || 'Geral'), tags: Array.isArray(data.tags) ? data.tags : [] 
+                        };
+                    });
+                    setQuizzes(loadedQuizzes);
+                }, (error) => console.error("Erro quizzes onSnapshot:", error));
+
+                // 3. Fetch Reviews
                 const qReviews = query(collection(db, `users/${user.uid}/reviews`));
                 const unsubReviews = onSnapshot(qReviews, (snapshot) => {
                     const userReviews = {};
@@ -1621,21 +1970,13 @@
                     setReviews(userReviews);
                 }, (error) => console.error("Erro reviews onSnapshot:", error));
                 
+                // 4. Fetch User Stats
                 const statsRef = doc(db, 'leaderboard', user.uid);
                 const unsubStats = onSnapshot(statsRef, async (docSnap) => {
                     if (!docSnap.exists()) {
                         const defaultStats = { 
-                            email: user.email || 'Anônimo', 
-                            cardsSeen: 0, 
-                            correctAnswers: 0, 
-                            retention: 0, 
-                            timeStudied: 0, 
-                            currentStreak: 0,
-                            dailyActivity: {},
-                            dailyTime: {},
-                            algorithm: 'fsrs', // Default to modern engine
-                            fsrsRetention: 0.90,
-                            learningProfile: 'standard'
+                            email: user.email || 'Anônimo', cardsSeen: 0, correctAnswers: 0, retention: 0, timeStudied: 0, currentStreak: 0,
+                            dailyActivity: {}, dailyTime: {}, algorithm: 'fsrs', fsrsRetention: 0.90, learningProfile: 'standard'
                         };
                         await setDoc(statsRef, { ...defaultStats, lastActive: serverTimestamp() });
                     } else {
@@ -1643,11 +1984,7 @@
                     }
                 }, (error) => console.error("Erro stats onSnapshot:", error));
 
-                return () => {
-                    unsubCards();
-                    unsubReviews();
-                    unsubStats();
-                };
+                return () => { unsubCards(); unsubQuizzes(); unsubReviews(); unsubStats(); };
             }, [user]);
 
             const getDecksStructure = () => {
@@ -1668,9 +2005,8 @@
                     let isNew = false, isLearn = false, isReview = false;
                     const rev = reviews[card.id];
 
-                    if (!rev) {
-                        isNew = true; 
-                    } else {
+                    if (!rev) { isNew = true; } 
+                    else {
                         let dueDate = rev.dueDate;
                         if (dueDate && typeof dueDate.toDate === 'function') dueDate = dueDate.toDate();
                         else dueDate = new Date(dueDate || now);
@@ -1683,19 +2019,9 @@
                         }
                     }
 
-                    if (isNew) {
-                        structure[cat].stats.n++;
-                        structure[cat].lessons[lesson].stats.n++;
-                        structure[cat].lessons[lesson].subcategories[sub].stats.n++;
-                    } else if (isLearn) {
-                        structure[cat].stats.l++;
-                        structure[cat].lessons[lesson].stats.l++;
-                        structure[cat].lessons[lesson].subcategories[sub].stats.l++;
-                    } else if (isReview) {
-                        structure[cat].stats.r++;
-                        structure[cat].lessons[lesson].stats.r++;
-                        structure[cat].lessons[lesson].subcategories[sub].stats.r++;
-                    }
+                    if (isNew) { structure[cat].stats.n++; structure[cat].lessons[lesson].stats.n++; structure[cat].lessons[lesson].subcategories[sub].stats.n++; } 
+                    else if (isLearn) { structure[cat].stats.l++; structure[cat].lessons[lesson].stats.l++; structure[cat].lessons[lesson].subcategories[sub].stats.l++; } 
+                    else if (isReview) { structure[cat].stats.r++; structure[cat].lessons[lesson].stats.r++; structure[cat].lessons[lesson].subcategories[sub].stats.r++; }
 
                     structure[cat].lessons[lesson].subcategories[sub].cards.push(card);
                 });
@@ -1706,36 +2032,23 @@
                 let queue = cards;
                 const now = new Date();
                 
-                if (settings.category && settings.category !== 'All') {
-                    queue = queue.filter(c => normalize(c.category) === normalize(settings.category));
-                }
+                if (settings.category && settings.category !== 'All') queue = queue.filter(c => normalize(c.category) === normalize(settings.category));
+                if (settings.lesson && settings.lesson !== 'All') queue = queue.filter(c => normalize(c.lesson || 'Conteúdo Geral') === normalize(settings.lesson));
+                if (settings.subcategory && settings.subcategory !== 'All') queue = queue.filter(c => normalize(c.subcategory || 'Geral') === normalize(settings.subcategory));
+                if (settings.tag && settings.tag !== 'All') queue = queue.filter(c => (c.tags || []).includes(settings.tag));
 
-                if (settings.lesson && settings.lesson !== 'All') {
-                    queue = queue.filter(c => normalize(c.lesson || 'Conteúdo Geral') === normalize(settings.lesson));
-                }
-
-                if (settings.subcategory && settings.subcategory !== 'All') {
-                    queue = queue.filter(c => normalize(c.subcategory || 'Geral') === normalize(settings.subcategory));
-                }
-                
-                if (settings.tag && settings.tag !== 'All') {
-                    queue = queue.filter(c => (c.tags || []).includes(settings.tag));
-                }
-
-                if (settings.mode === 'new') {
-                    queue = queue.filter(c => !reviews[c.id]);
-                } else if (settings.mode === 'due') {
+                if (settings.mode === 'new') queue = queue.filter(c => !reviews[c.id]);
+                else if (settings.mode === 'due') {
                     queue = queue.filter(c => {
-                        const r = reviews[c.id];
-                        if (!r) return true;
+                        const r = reviews[c.id]; if (!r) return true;
                         let dueDate;
                         if (r.dueDate && typeof r.dueDate.toDate === 'function') dueDate = r.dueDate.toDate();
                         else dueDate = new Date(r.dueDate || now);
                         return dueDate <= now;
                     });
-                } else if (settings.mode === 'cram') {
-                    queue = queue.sort(() => Math.random() - 0.5);
-                }
+                } 
+                else if (settings.mode === 'cram') queue = queue.sort(() => Math.random() - 0.5);
+                
                 if (settings.mode !== 'cram') queue = queue.sort(() => Math.random() - 0.5);
                 
                 queue = queue.slice(0, settings.limit);
@@ -1757,35 +2070,40 @@
 
                 if (user) {
                     queue = queue.filter(card => {
-                        const review = reviews[card.id];
-                        if (!review) return true; 
-                        
+                        const review = reviews[card.id]; if (!review) return true; 
                         let dueDate;
                         if (review.dueDate && typeof review.dueDate.toDate === 'function') dueDate = review.dueDate.toDate();
                         else dueDate = new Date(review.dueDate || now);
-                        
                         return dueDate <= now; 
                     });
-                } else {
-                    queue = queue.sort(() => Math.random() - 0.5);
-                }
+                } else queue = queue.sort(() => Math.random() - 0.5);
                 
                 if (queue.length === 0) {
-                    if (confirm("Você já concluiu todos os cards vencidos até este momento exato.\n\nOs cards em aprendizado que retornam daqui a pouco estarão aguardando o tempo acabar. \n\nDeseja forçar uma revisão extra de fixação agora (Modo Cram)?")) {
-                        startCustomStudy({ 
-                            category: category || 'All', 
-                            lesson: lesson || 'All', 
-                            subcategory: subcategory || 'All', 
-                            mode: 'cram', 
-                            limit: 100, 
-                            tag: 'All' 
-                        });
+                    if (confirm("Você já concluiu todos os cards vencidos até este momento exato.\n\nDeseja forçar uma revisão extra de fixação agora (Modo Cram)?")) {
+                        startCustomStudy({ category: category || 'All', lesson: lesson || 'All', subcategory: subcategory || 'All', mode: 'cram', limit: 100, tag: 'All' });
                     }
                     return;
                 }
                 setStudyQueue(queue.sort(() => Math.random() - 0.5));
                 setView("study");
             };
+
+            // START QUIZ ALUNO
+            const handleStartQuiz = (category) => {
+                let sessionQuizzes = quizzes;
+                if (category !== 'All') {
+                    sessionQuizzes = quizzes.filter(q => normalize(q.category) === normalize(category));
+                }
+                
+                // Shuffle questions
+                sessionQuizzes = sessionQuizzes.sort(() => Math.random() - 0.5);
+                
+                if (sessionQuizzes.length === 0) { alert("Nenhum simulado disponível para esta seleção."); return; }
+                
+                setQuizQueue(sessionQuizzes);
+                setView("quiz_session");
+            };
+
 
             if (view === "loading") {
                 return (
@@ -1800,23 +2118,12 @@
             }
 
             if (view === "auth") {
-                return <AuthScreen 
-                    onLogin={() => setView("decks")} 
-                    guestMode={() => {
-                        signInAnonymously(auth).then(() => setView("decks")).catch(err => alert("Erro no login anônimo: " + err.message));
-                    }} 
-                />;
+                return <AuthScreen onLogin={() => setView("decks")} guestMode={() => { signInAnonymously(auth).then(() => setView("decks")).catch(err => alert("Erro: " + err.message)); }} />;
             }
 
             const structure = getDecksStructure();
-            
             let totalDue = 0;
-            if(user) {
-                Object.values(structure).forEach(cat => {
-                   totalDue += (cat.stats.n + cat.stats.l + cat.stats.r);
-                });
-            }
-
+            if(user) Object.values(structure).forEach(cat => { totalDue += (cat.stats.n + cat.stats.l + cat.stats.r); });
             const allTags = [...new Set(cards.flatMap(c => c.tags || []))].sort();
 
             return (
@@ -1829,8 +2136,9 @@
                                 </div>
                                 <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-blue-400 align-top border border-blue-500/30">v2.0</span></span>
                             </div>
-                            <div className="flex items-center gap-4">
-                                {user && <button onClick={() => setView("leaderboard")} className="hidden md:flex text-yellow-500 items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking Diário</button>}
+                            <div className="flex items-center gap-2 md:gap-4 overflow-x-auto custom-scrollbar">
+                                <button onClick={() => setView("quizzes")} className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${view === 'quizzes' || view === 'quiz_session' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-slate-900 text-slate-400 hover:text-purple-400 border-slate-800 hover:bg-slate-800'}`}><ListTodo size={14} /> Simulados</button>
+                                {user && <button onClick={() => setView("leaderboard")} className={`hidden md:flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${view === 'leaderboard' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'text-slate-400 bg-slate-900 border-slate-800 hover:text-yellow-400 hover:bg-slate-800'}`}><Trophy size={14} /> Ranking Diário</button>}
                                 {isAdmin && <button onClick={() => setView("admin")} className="text-amber-500 hover:text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20 transition-all flex items-center gap-1.5 text-sm"><Lock size={14} /> Admin</button>}
                                 {user && <button onClick={() => setSettingsOpen(true)} className="text-slate-400 hover:text-white transition-colors p-2 rounded-full hover:bg-slate-800" title="Configurações (Engine)"><Settings size={20}/></button>}
                                 {user ? <button onClick={() => signOut(auth)} className="text-slate-400 hover:text-red-400 transition-colors p-2" title="Sair"><LogOut size={20}/></button> : null}
@@ -1839,6 +2147,7 @@
                     </nav>
 
                     <main className="flex-1 max-w-6xl mx-auto w-full p-4 relative">
+                        {/* VIEW: DECKS FLASHCARDS */}
                         {view === "decks" && (
                             <div className="animate-fade-in space-y-6 flex flex-col min-h-[70vh]">
                                 <header className="border-b border-slate-800 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1856,25 +2165,25 @@
                                 <DeckTable structure={structure} startStudy={startStudy} />
                                 <DailyStatsSummary userStats={userStats} />
                                 
-                                <SettingsModal 
-                                    isOpen={settingsOpen} 
-                                    onClose={() => setSettingsOpen(false)} 
-                                    userStats={userStats} 
-                                    setUserStats={setUserStats} 
-                                    user={user} 
-                                />
-                                <CustomStudyModal 
-                                    isOpen={customStudyOpen} 
-                                    onClose={() => setCustomStudyOpen(false)} 
-                                    onStart={startCustomStudy} 
-                                    categories={[...new Set(cards.map(c => normalize(c.category)))]} 
-                                    tags={allTags} 
-                                />
+                                <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} userStats={userStats} setUserStats={setUserStats} user={user} />
+                                <CustomStudyModal isOpen={customStudyOpen} onClose={() => setCustomStudyOpen(false)} onStart={startCustomStudy} categories={[...new Set(cards.map(c => normalize(c.category)))]} tags={allTags} />
                             </div>
                         )}
+                        
+                        {/* VIEW: SESSÃO FLASHCARDS */}
                         {view === "study" && <StudySession initialQueue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} userStats={userStats} setUserStats={setUserStats} onFinish={() => setView("decks")} />}
+                        
+                        {/* VIEW: DASHBOARD SIMULADOS */}
+                        {view === "quizzes" && <QuizDashboard quizzes={quizzes} onStartQuiz={handleStartQuiz} />}
+
+                        {/* VIEW: SESSÃO SIMULADOS */}
+                        {view === "quiz_session" && <QuizSession queue={quizQueue} onFinish={() => setView("quizzes")} />}
+
+                        {/* VIEW: LEADERBOARD */}
                         {view === "leaderboard" && <LeaderboardView isAdmin={isAdmin} />}
-                        {view === "admin" && isAdmin && <AdminPanel cards={cards} onExit={() => setView("decks")} />}
+                        
+                        {/* VIEW: ADMIN */}
+                        {view === "admin" && isAdmin && <AdminPanel cards={cards} quizzes={quizzes} onExit={() => setView("decks")} />}
                     </main>
                 </div>
             );
