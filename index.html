@@ -96,7 +96,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare, ListTodo, CheckCircle, Circle, HelpCircle, Award } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare, ListTodo, CheckCircle, Circle, HelpCircle, Award, Hash } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -807,7 +807,7 @@
                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
                                 
                                 <div className="w-full max-h-[50%] overflow-y-auto custom-scrollbar px-2 mb-4 pb-4 border-b border-slate-800">
-                                    <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center" dangerouslySetInnerHTML={{__html: card.front || ''}}></div>
+                                    <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center flex flex-col items-center justify-center" dangerouslySetInnerHTML={{__html: card.front || ''}}></div>
                                 </div>
 
                                 <div className="flex-1 flex flex-col">
@@ -842,7 +842,7 @@
 
                                     <div className="w-full">
                                         <span className="text-[10px] uppercase text-blue-500/50 font-bold tracking-widest block mb-2 text-center">Resposta Gabarito:</span>
-                                        <div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.back || ''}}></div>
+                                        <div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words flex flex-col items-center justify-center" dangerouslySetInnerHTML={{__html: card.back || ''}}></div>
                                     </div>
                                 </div>
                             </div>
@@ -1142,10 +1142,10 @@
         };
 
         // ============================================================================
-        // ADMIN PANEL - ATUALIZADO COM ABAS (FLASHCARDS / SIMULADOS)
+        // ADMIN PANEL - ATUALIZADO COM ABAS E CORREÇÕES NOS SIMULADOS
         // ============================================================================
         const AdminPanel = ({ cards, quizzes, onExit }) => {
-            const [adminTab, setAdminTab] = React.useState('flashcards'); // 'flashcards' | 'quizzes'
+            const [adminTab, setAdminTab] = React.useState('flashcards');
 
             // --- ESTADOS FLASHCARDS ---
             const [form, setForm] = React.useState({ front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] });
@@ -1166,7 +1166,8 @@
             const [isBulkProcessing, setIsBulkProcessing] = React.useState(false);
 
             // --- ESTADOS SIMULADOS ---
-            const [quizForm, setQuizForm] = React.useState({ question: '', options: ['', '', '', '', ''], correctIndex: 0, category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] });
+            // Simulado não usa lesson nem subcategory para evitar complexidade e seguir focado na matéria
+            const [quizForm, setQuizForm] = React.useState({ question: '', options: ['', '', '', '', ''], correctIndex: 0, category: 'Sistemas Operacionais', tags: [], questionNumber: '' });
             const [quizEditingId, setQuizEditingId] = React.useState(null);
             
             const existingCategories = [...new Set([...cards, ...quizzes].map(c => normalize(c.category)))].filter(Boolean).sort();
@@ -1195,7 +1196,12 @@
             });
 
             const filteredCards = filterList(cards);
-            const filteredQuizzes = filterList(quizzes);
+            // Ordenar simulados no Admin pelo Número da Questão, depois pela categoria
+            const filteredQuizzes = filterList(quizzes).sort((a, b) => {
+                const numA = a.questionNumber ? parseInt(a.questionNumber) : 9999;
+                const numB = b.questionNumber ? parseInt(b.questionNumber) : 9999;
+                return numA - numB;
+            });
 
             // --- LÓGICA FLASHCARDS (INALTERADA) ---
             const allFilteredSelected = filteredCards.length > 0 && filteredCards.every(c => selectedCardIds.has(c.id));
@@ -1330,7 +1336,6 @@
                 if(confirm("Deletar este card de forma irreversível?")) await deleteDoc(doc(db, "cards", id)); 
             };
 
-
             // --- LÓGICA SIMULADOS (ATUALIZADA) ---
             const handleQuizOptionChange = (index, value) => {
                 const newOptions = [...quizForm.options];
@@ -1351,20 +1356,20 @@
 
                 try {
                     const dataToSave = {
-                        text: quizForm.question, // Adaptado para usar 'text' para o enunciado de acordo com o DB de "exams"
-                        question: quizForm.question, // Mantido por retrocompatibilidade se já existente em outros
+                        text: quizForm.question, // Manteve-se 'text' por compatibilidade do banco
+                        question: quizForm.question, 
                         options: quizForm.options,
                         correctIndex: quizForm.correctIndex,
                         category: normalize(quizForm.category || 'Geral'),
-                        lesson: normalize(quizForm.lesson || 'Conteúdo Geral'),
-                        subcategory: normalize(quizForm.subcategory || 'Geral'),
+                        questionNumber: quizForm.questionNumber ? parseInt(quizForm.questionNumber) : '', // Novo campo salvo
                         tags: quizForm.tags 
+                        // Lesson e subcategory foram omitidos propositalmente como solicitado
                     };
-                    // Modificado a coleção alvo para 'exams' em vez de 'quizzes'
+                    
                     if (quizEditingId) { await updateDoc(doc(db, "exams", quizEditingId), dataToSave); setQuizEditingId(null); } 
                     else { await addDoc(collection(db, "exams"), { ...dataToSave, createdAt: serverTimestamp() }); }
                     
-                    setQuizForm(prev => ({ ...prev, question: '', options: ['', '', '', '', ''], correctIndex: 0, tags: [] })); 
+                    setQuizForm(prev => ({ ...prev, question: '', options: ['', '', '', '', ''], correctIndex: 0, tags: [], questionNumber: '' })); 
                 } catch (e) { alert("Erro ao salvar questão: " + e.message); }
             };
 
@@ -1373,18 +1378,18 @@
                 while(paddedOptions.length < 5) paddedOptions.push('');
 
                 setQuizForm({
-                    question: quiz.question || quiz.text || '', // Suporta 'text'
+                    question: quiz.question || quiz.text || '',
                     options: paddedOptions.slice(0, 5),
                     correctIndex: quiz.correctIndex !== undefined ? quiz.correctIndex : 0,
-                    category: normalize(quiz.category), lesson: normalize(quiz.lesson || 'Conteúdo Geral'),
-                    subcategory: normalize(quiz.subcategory), tags: quiz.tags || [] 
+                    category: normalize(quiz.category),
+                    questionNumber: quiz.questionNumber || '',
+                    tags: quiz.tags || [] 
                 }); 
                 setQuizEditingId(quiz.id); 
             };
             
             const handleDeleteQuiz = async (id, e) => { 
                 e.stopPropagation();
-                // Modificado a coleção alvo para 'exams' em vez de 'quizzes'
                 if(confirm("Deletar esta questão de simulado irreversivelmente?")) await deleteDoc(doc(db, "exams", id)); 
             };
 
@@ -1418,7 +1423,7 @@
                     <div className="flex-1 overflow-hidden flex flex-col">
                         <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden h-full">
                             
-                            {/* COLUNA ESQUERDA: LISTAGEM E FILTROS (Comum para ambas as abas) */}
+                            {/* COLUNA ESQUERDA: LISTAGEM E FILTROS */}
                             <div className="w-full md:w-[45%] lg:w-1/3 flex flex-col border-b md:border-b-0 md:border-r border-slate-700/50 pb-4 md:pr-4 h-64 md:h-full">
                                 
                                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0 space-y-3">
@@ -1429,13 +1434,13 @@
                                             <option value="Todos">Todas Matérias</option>
                                             {existingCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                         </select>
-                                        <select value={filterLesson} onChange={(e) => setFilterLesson(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
+                                        <select value={filterLesson} onChange={(e) => setFilterLesson(e.target.value)} className={`w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500 ${adminTab === 'quizzes' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={adminTab === 'quizzes'}>
                                             <option value="Todos">Todas Aulas</option>
-                                            {existingLessons.map(l => <option key={l} value={l}>{l}</option>)}
+                                            {adminTab === 'flashcards' && existingLessons.map(l => <option key={l} value={l}>{l}</option>)}
                                         </select>
-                                        <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
+                                        <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className={`w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500 ${adminTab === 'quizzes' ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={adminTab === 'quizzes'}>
                                             <option value="Todos">Todos Tópicos</option>
-                                            {existingSubcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                                            {adminTab === 'flashcards' && existingSubcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
                                         </select>
                                         <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
                                             <option value="Todas">Qualquer Tag</option>
@@ -1494,8 +1499,12 @@
                                                 <div key={q.id} onClick={() => handleEditQuiz(q)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group flex gap-3 ${quizEditingId === q.id ? 'bg-slate-800 border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.1)]' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex flex-col mb-1">
-                                                            <span className="text-purple-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{q.category}</span>
-                                                            <span className="text-slate-500 text-[10px] font-bold truncate">{q.lesson} &gt; {q.subcategory || 'Geral'}</span>
+                                                            <span className="text-purple-400 text-[10px] font-mono uppercase tracking-wider opacity-90 truncate flex items-center gap-1">
+                                                                {q.category} 
+                                                                <span className="bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded ml-1 border border-purple-500/30 font-bold">
+                                                                    {q.questionNumber ? `Q. ${q.questionNumber}` : '?'}
+                                                                </span>
+                                                            </span>
                                                         </div>
                                                         <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (q.question || q.text || '').replace(/<[^>]*>?/gm, '')}}></div>
                                                     </div>
@@ -1635,26 +1644,21 @@
                                 )}
 
                                 {adminTab === 'quizzes' && (
-                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (SIMULADOS) --- */
+                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (SIMULADOS) FOCADO E LIMPO --- */
                                     <form onSubmit={handleSaveQuiz} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col animate-fade-in">
                                         <div className="flex items-center gap-2 mb-2">
                                             <ListTodo size={18} className="text-purple-500"/>
                                             <h3 className="text-lg font-bold text-white">{quizEditingId ? 'Editar Questão (Simulado)' : 'Criar Questão (Simulado)'}</h3>
                                         </div>
 
-                                        {/* Filtros Herdados */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-shrink-0">
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria</label>
-                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Sistemas Operacionais" value={quizForm.category} onChange={e => setQuizForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria (Geral)</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Ex: Sistemas Operacionais" value={quizForm.category} onChange={e => setQuizForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
                                             </div>
                                             <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula / Unidade</label>
-                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Aula 01" value={quizForm.lesson} onChange={e => setQuizForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Tópico</label>
-                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm" placeholder="Conceitos Básicos" value={quizForm.subcategory} onChange={e => setQuizForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                                <label className="text-xs font-bold text-emerald-400 uppercase ml-1 flex items-center gap-1 block"><Hash size={12}/> Número da Questão</label>
+                                                <input type="number" min="1" className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Ex: 1" value={quizForm.questionNumber} onChange={e => setQuizForm(prev => ({...prev, questionNumber: e.target.value}))} />
                                             </div>
                                         </div>
                                         
@@ -1699,7 +1703,7 @@
                                         </div>
                                         
                                         <div className="flex gap-3 pt-4 border-t border-slate-700 flex-shrink-0 mt-auto">
-                                            {quizEditingId && (<button type="button" onClick={() => { setQuizEditingId(null); setQuizForm(prev => ({ ...prev, question: '', options: ['', '', '', '', ''], correctIndex: 0, category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] })); }} className="w-1/3 bg-slate-700 hover:bg-slate-600 text-white font-bold p-3 rounded-lg transition-colors flex items-center justify-center gap-2"><RotateCcw size={16}/> Cancelar</button>)}
+                                            {quizEditingId && (<button type="button" onClick={() => { setQuizEditingId(null); setQuizForm(prev => ({ ...prev, question: '', options: ['', '', '', '', ''], correctIndex: 0, category: 'Sistemas Operacionais', tags: [], questionNumber: '' })); }} className="w-1/3 bg-slate-700 hover:bg-slate-600 text-white font-bold p-3 rounded-lg transition-colors flex items-center justify-center gap-2"><RotateCcw size={16}/> Cancelar</button>)}
                                             <button type="submit" className="flex-1 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-purple-900/20 transition-all flex justify-center gap-2 items-center">{quizEditingId ? <><Save size={18} /> Atualizar Questão</> : <><Plus size={18} /> Inserir Questão no Banco de Exames</>}</button>
                                         </div>
                                     </form>
@@ -1716,12 +1720,16 @@
         // ============================================================================
         const QuizDashboard = ({ quizzes, onStartQuiz }) => {
             
-            // Agrupar quizzes por categoria
+            // Agrupar quizzes por categoria usando Lowercase como chave para evitar duplicatas case-sensitive
             const categoriesMap = {};
             quizzes.forEach(q => {
-                const cat = normalize(q.category || 'Geral');
-                if(!categoriesMap[cat]) categoriesMap[cat] = 0;
-                categoriesMap[cat]++;
+                const rawCat = q.category || 'Geral';
+                const catKey = normalize(rawCat).toLowerCase();
+                
+                if(!categoriesMap[catKey]) {
+                    categoriesMap[catKey] = { name: rawCat, count: 0 };
+                }
+                categoriesMap[catKey].count++;
             });
 
             if (Object.keys(categoriesMap).length === 0) {
@@ -1754,22 +1762,22 @@
                             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-purple-500/20 to-transparent rounded-bl-full"></div>
                             <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 mb-4 group-hover:scale-110 transition-transform"><Layers size={28}/></div>
                             <h3 className="text-xl font-bold text-white mb-1">Simulado Global</h3>
-                            <p className="text-sm text-slate-400 mb-4">Mistura aleatória de todas as matérias disponíveis.</p>
+                            <p className="text-sm text-slate-400 mb-4">Mistura de todas as matérias disponíveis.</p>
                             <div className="mt-auto inline-block bg-slate-900 px-3 py-1 rounded-full text-xs font-bold text-slate-300 border border-slate-700">{quizzes.length} Questões</div>
                         </div>
 
-                        {Object.entries(categoriesMap).sort().map(([category, count]) => (
+                        {Object.values(categoriesMap).sort((a,b) => a.name.localeCompare(b.name)).map(catInfo => (
                             <div 
-                                key={category}
+                                key={catInfo.name}
                                 className="glass p-6 rounded-2xl border border-slate-700 hover:border-blue-500/50 hover:bg-slate-800/80 transition-all cursor-pointer group flex flex-col"
-                                onClick={() => onStartQuiz(category)}
+                                onClick={() => onStartQuiz(catInfo.name)}
                             >
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-500/20 transition-colors"><Folder size={24}/></div>
-                                    <span className="bg-slate-900 px-2 py-1 rounded-full text-xs font-bold text-slate-400 border border-slate-700">{count} Q.</span>
+                                    <span className="bg-slate-900 px-2 py-1 rounded-full text-xs font-bold text-slate-400 border border-slate-700">{catInfo.count} Q.</span>
                                 </div>
-                                <h3 className="text-lg font-bold text-white mb-2 line-clamp-2">{category}</h3>
-                                <p className="text-xs text-slate-500 mt-auto">Bateria focada apenas em {category}.</p>
+                                <h3 className="text-lg font-bold text-white mb-2 line-clamp-2">{catInfo.name}</h3>
+                                <p className="text-xs text-slate-500 mt-auto">Bateria focada apenas em {catInfo.name}.</p>
                             </div>
                         ))}
                     </div>
@@ -1849,35 +1857,36 @@
                         <div className="flex flex-col items-start">
                             <div className="flex items-center gap-2">
                                 <span className="bg-slate-900 px-2 py-1 rounded text-purple-400 border border-slate-800">{currentQuestion.category}</span>
-                                <span className="text-slate-600">/</span>
-                                <span className="text-slate-300">{currentQuestion.lesson || 'Geral'}</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 font-mono"><Layers size={14}/><span>Questão {index + 1} de {queue.length}</span></div>
+                        <div className="flex items-center gap-2 font-mono">
+                            <Layers size={14}/>
+                            <span>{currentQuestion.questionNumber ? `Questão ${currentQuestion.questionNumber}` : `Progresso ${index + 1}/${queue.length}`}</span>
+                        </div>
                     </div>
 
                     <div className="glass flex-1 rounded-3xl border border-slate-700 p-6 md:p-10 flex flex-col shadow-2xl bg-slate-900">
                         
-                        {/* Enunciado */}
-                        <div className="mb-8">
-                            <div className="prose prose-invert prose-lg font-medium text-white max-w-none text-left" dangerouslySetInnerHTML={{__html: currentQuestion.question || currentQuestion.text}}></div>
+                        {/* Enunciado (Alinhamento centralizado similar aos flashcards) */}
+                        <div className="mb-8 w-full">
+                            <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center flex flex-col items-center justify-center" dangerouslySetInnerHTML={{__html: currentQuestion.question || currentQuestion.text}}></div>
                         </div>
 
-                        {/* Alternativas */}
+                        {/* Alternativas (Aparência limpa e contida) */}
                         <div className="space-y-3 mt-auto">
                             {validOptions.map((opt, idx) => {
                                 let stateClass = "bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-500 text-slate-300 cursor-pointer";
-                                let icon = <span className="font-bold text-slate-500 w-5 flex-shrink-0">{String.fromCharCode(65 + idx)}</span>;
+                                let icon = <span className="font-bold text-slate-500 w-6 text-center shrink-0">{String.fromCharCode(65 + idx)}</span>;
 
                                 if (showExplanation) {
                                     stateClass = "bg-slate-900 border-slate-800 text-slate-500 opacity-60 cursor-default"; // Default post-answer state
                                     
                                     if (idx === currentQuestion.correctIndex) {
                                         stateClass = "bg-emerald-900/30 border-emerald-500/50 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.1)] z-10 scale-[1.02] transform transition-transform";
-                                        icon = <CheckCircle size={20} className="text-emerald-400 shrink-0"/>;
+                                        icon = <CheckCircle size={24} className="text-emerald-400 shrink-0"/>;
                                     } else if (idx === selectedOption) {
                                         stateClass = "bg-red-900/30 border-red-500/50 text-red-100 z-10";
-                                        icon = <X size={20} className="text-red-400 shrink-0"/>;
+                                        icon = <X size={24} className="text-red-400 shrink-0"/>;
                                     }
                                 }
 
@@ -1885,10 +1894,10 @@
                                     <div 
                                         key={idx} 
                                         onClick={() => handleSelect(idx)}
-                                        className={`w-full text-left p-4 rounded-xl border flex items-start gap-4 transition-all duration-300 ${stateClass}`}
+                                        className={`w-full text-left p-4 rounded-xl border flex items-center gap-4 transition-all duration-300 ${stateClass}`}
                                     >
-                                        <div className="mt-0.5">{icon}</div>
-                                        <div className="flex-1 text-sm md:text-base leading-relaxed">{opt}</div>
+                                        <div className="flex items-center justify-center">{icon}</div>
+                                        <div className="flex-1 text-sm md:text-base leading-relaxed font-medium">{opt}</div>
                                     </div>
                                 );
                             })}
@@ -1955,17 +1964,17 @@
                     setCards(loadedCards);
                 }, (error) => console.error("Erro cards onSnapshot:", error));
 
-                // 2. Fetch Quizzes (Puxando da coleção 'exams' de acordo com seu banco de dados)
+                // 2. Fetch Quizzes (Puxando da coleção 'exams')
                 const qQuizzes = query(collection(db, "exams"));
                 const unsubQuizzes = onSnapshot(qQuizzes, (snapshot) => {
                     const loadedQuizzes = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
                             id: doc.id, ...data,
-                            // Mapeia 'text' para o enunciado da questão para retrocompatibilidade na UI
                             question: data.text || data.question || '', 
-                            category: normalize(data.category || 'Sem Categoria'), lesson: normalize(data.lesson || 'Conteúdo Geral'),
-                            subcategory: normalize(data.subcategory || 'Geral'), tags: Array.isArray(data.tags) ? data.tags : [] 
+                            category: normalize(data.category || 'Sem Categoria'), 
+                            questionNumber: data.questionNumber || '', // Puxando o número da questão
+                            tags: Array.isArray(data.tags) ? data.tags : [] 
                         };
                     });
                     setQuizzes(loadedQuizzes);
@@ -2101,11 +2110,16 @@
             const handleStartQuiz = (category) => {
                 let sessionQuizzes = quizzes;
                 if (category !== 'All') {
-                    sessionQuizzes = quizzes.filter(q => normalize(q.category) === normalize(category));
+                    // Match case insensitive para garantir que acha a matéria certa
+                    sessionQuizzes = quizzes.filter(q => normalize(q.category).toLowerCase() === normalize(category).toLowerCase());
                 }
                 
-                // Shuffle questions
-                sessionQuizzes = sessionQuizzes.sort(() => Math.random() - 0.5);
+                // Ordenar pelo NÚMERO DA QUESTÃO crescentemente, em vez de ser aleatório
+                sessionQuizzes = sessionQuizzes.sort((a, b) => {
+                    const numA = a.questionNumber ? parseInt(a.questionNumber) : 9999;
+                    const numB = b.questionNumber ? parseInt(b.questionNumber) : 9999;
+                    return numA - numB;
+                });
                 
                 if (sessionQuizzes.length === 0) { alert("Nenhum simulado disponível para esta seleção."); return; }
                 
