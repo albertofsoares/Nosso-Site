@@ -489,6 +489,13 @@
             const execCmd = (cmd) => { document.execCommand(cmd, false, null); };
             const execBlock = (tag) => { document.execCommand('formatBlock', false, tag); };
 
+            // INTERCEPTA O EVENTO DE COLAR (PASTE) E OBRIGA A SER TEXTO PURO
+            const handlePaste = (e) => {
+                e.preventDefault();
+                const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+            };
+
             return (
                 <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden flex flex-col h-40 focus-within:border-blue-500 transition-colors">
                     <div className="bg-slate-800 p-2 flex gap-1 border-b border-slate-700 flex-wrap">
@@ -497,7 +504,8 @@
                         <button type="button" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-slate-700 rounded text-slate-300" title="Lista"><List size={16}/></button>
                         <button type="button" onClick={() => execBlock('pre')} className="p-1.5 hover:bg-slate-700 rounded text-purple-400" title="Inserir Código (Bloco)"><Code size={16}/></button>
                     </div>
-                    <div ref={editorRef} className="flex-1 p-4 text-white focus:outline-none overflow-y-auto custom-scrollbar prose text-sm" contentEditable onInput={(e) => onChange(e.currentTarget.innerHTML)}></div>
+                    {/* Evento onPaste adicionado aqui na div editável */}
+                    <div ref={editorRef} className="flex-1 p-4 text-white focus:outline-none overflow-y-auto custom-scrollbar prose text-sm" contentEditable onInput={(e) => onChange(e.currentTarget.innerHTML)} onPaste={handlePaste}></div>
                 </div>
             );
         };
