@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L1 Cache (SM-2 & FSRS Engine)</title>
+    <title>L1 Cache (FSRS Engine v2.0)</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -47,14 +47,11 @@
     <style>
         .perspective-1000 { perspective: 1000px; }
         .transform-style-3d { transform-style: preserve-3d; }
-        
-        /* Backface visibility agressiva para todos os motores de renderização */
         .backface-hidden { 
             backface-visibility: hidden; 
             -webkit-backface-visibility: hidden; 
             transform: translateZ(0); 
         }
-        
         .rotate-y-180 { transform: rotateY(180deg); }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -84,7 +81,6 @@
         .admin-checkbox:checked { background-color: #3b82f6; border-color: #3b82f6; }
         .admin-checkbox:checked::before { transform: scale(1); }
         
-        /* Estilos do Slider Nativo */
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #3b82f6; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
@@ -97,11 +93,10 @@
 
     <script type="text/babel" data-type="module">
 
-        // --- IMPORTS FIREBASE & ICONS ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -116,7 +111,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // NORMALIZAÇÃO AGRESSIVA
         const normalize = (val) => String(val || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
 
         const getLocalDateString = (dateObj = new Date()) => {
@@ -126,7 +120,6 @@
             return `${year}-${month}-${day}`;
         };
 
-        // --- MOTOR DE ÁUDIO SINTÉTICO ---
         const AudioEngine = (function() {
             let audioCtx = null;
             const init = () => {
@@ -167,7 +160,6 @@
             return { play };
         })();
 
-
         class ErrorBoundary extends React.Component {
             constructor(props) { super(props); this.state = { hasError: false, error: null }; }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -185,11 +177,15 @@
         }
 
         // ============================================================================
-        // ENGINE HÍBRIDO ANKI: FSRS v4 & SM-2
+        // ENGINE L1 CACHE v2.0
         // ============================================================================
         
-        // Passos para memória recente mantidos (Crucial para retenção inicial sob medicação/fadiga)
-        const LEARNING_STEPS = [1, 10, 60]; 
+        // NOVO: Perfis Cognitivos de Micro-Learning
+        const PROFILES = {
+            standard: [1, 10, 60], // Padrão: 1 min, 10 min, 1 hora
+            fragile: [1, 3, 10, 30, 60] // Alta Fadiga: Escadas menores para impedir o lapso sob medicação
+        };
+
         const GRADUATING_INTERVAL = 1; 
         const EASY_INTERVAL = 4; 
         const STARTING_EASE = 2.5; 
@@ -203,55 +199,45 @@
             return Math.min(MAX_INTERVAL, Math.max(interval + fuzz, interval)); 
         };
 
-        // --- FSRS v4 MATH CORE ---
-        // Pesos nativos FSRS v4 treinados para agendamento ótimo de memórias.
         const FSRS_WEIGHTS = [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61];
 
         const fsrsCalculate = (currentData, rating, lastReviewTime, desiredRetention = 0.90) => {
             let { s, d, state } = currentData;
             let nextS = s || 0, nextD = d || 0;
 
-            // Rating map: 1=Again, 2=Hard, 3=Good, 4=Easy
             if (!s || state === 'new') {
-                // Initial S and D
                 nextS = FSRS_WEIGHTS[rating - 1];
                 nextD = Math.min(Math.max(FSRS_WEIGHTS[4] - FSRS_WEIGHTS[5] * (rating - 3), 1), 10);
             } else {
-                // Review phase updates
                 const elapsedDays = Math.max(0, (Date.now() - lastReviewTime) / 86400000);
-                const r = Math.exp(Math.log(0.9) * elapsedDays / s); // Retrievability formula
+                const r = Math.exp(Math.log(0.9) * elapsedDays / s);
 
                 nextD = Math.min(Math.max(d - FSRS_WEIGHTS[6] * (rating - 3), 1), 10);
-                nextD = FSRS_WEIGHTS[7] * FSRS_WEIGHTS[4] + (1 - FSRS_WEIGHTS[7]) * nextD; // Mean reversion
+                nextD = FSRS_WEIGHTS[7] * FSRS_WEIGHTS[4] + (1 - FSRS_WEIGHTS[7]) * nextD; 
 
-                if (rating === 1) { // Lapse penalty
+                if (rating === 1) { 
                     nextS = FSRS_WEIGHTS[11] * Math.pow(nextD, -FSRS_WEIGHTS[12]) * Math.pow(s, FSRS_WEIGHTS[13]) * Math.exp(FSRS_WEIGHTS[14] * (1 - r));
-                } else { // Success multiplier
-                    let w_rating = 1; // Good
-                    if (rating === 2) w_rating = FSRS_WEIGHTS[15]; // Hard
-                    if (rating === 4) w_rating = FSRS_WEIGHTS[16]; // Easy
-
+                } else { 
+                    let w_rating = 1; 
+                    if (rating === 2) w_rating = FSRS_WEIGHTS[15]; 
+                    if (rating === 4) w_rating = FSRS_WEIGHTS[16]; 
                     nextS = s * (1 + Math.exp(FSRS_WEIGHTS[8]) * (11 - nextD) * Math.pow(s, -FSRS_WEIGHTS[9]) * (Math.exp(FSRS_WEIGHTS[10] * (1 - r)) - 1) * w_rating);
                 }
             }
             
-            // Formula to calculate interval from S and desired retention
             const nextInterval = nextS * 9 * (1 / desiredRetention - 1);
             return { s: nextS, d: nextD, nextInterval: Math.max(1, Math.round(nextInterval)) };
         };
 
-        // --- CÁLCULO GERAL (HÍBRIDO) ---
-        const calculateNextReview = (rating, currentData, algorithm = 'sm2', fsrsRetention = 0.90) => {
+        const calculateNextReview = (rating, currentData, algorithm = 'sm2', fsrsRetention = 0.90, learningProfile = 'standard') => {
             let interval = Number(currentData?.interval) || 0; 
             let ease = Number(currentData?.ease) || STARTING_EASE;
             let state = String(currentData?.state || 'new').toLowerCase().trim(); 
             let step = Number(currentData?.step) || 0; 
             
-            // FSRS Data retrieval
             let s = Number(currentData?.s) || 0;
             let d = Number(currentData?.d) || 0;
             
-            // Parse robusto de data vindo do Firebase (Timestamp ou Date)
             let lastReviewTime = Date.now();
             if (currentData?.lastReviewed) {
                 if (typeof currentData.lastReviewed.toDate === 'function') lastReviewTime = currentData.lastReviewed.toDate().getTime();
@@ -269,9 +255,11 @@
             let newStep = step;
             let dueMinutes = 0;
 
-            const STEPS = (state === 'relearning') ? [10, 60] : LEARNING_STEPS;
+            // Injeta o perfil cognitivo dinâmico para os Learning Steps
+            const ACTIVE_STEPS = PROFILES[learningProfile] || PROFILES.standard;
+            // Se for relearning, pegamos os 2 primeiros passos da escada
+            const STEPS = (state === 'relearning') ? [ACTIVE_STEPS[0], ACTIVE_STEPS[1]] : ACTIVE_STEPS;
             
-            // Computa FSRS silenciosamente de forma concorrente para não perder dados ao trocar de Engine
             let fsrsResult = fsrsCalculate({ s, d, state }, rating, lastReviewTime, fsrsRetention);
 
             if (algorithm === 'fsrs') {
@@ -279,72 +267,49 @@
                 newD = fsrsResult.d;
             }
 
-            // MÁQUINA DE ESTADOS COMPARTILHADA (Anki-style Learning Steps)
             if (state === 'new' || state === 'learning' || state === 'relearning') {
-                if (rating === 1) { // Errou
-                    newStep = 0;
-                    dueMinutes = STEPS[0] || 1;
-                    newState = state === 'new' ? 'learning' : state; 
+                if (rating === 1) { 
+                    newStep = 0; dueMinutes = STEPS[0] || 1; newState = state === 'new' ? 'learning' : state; 
                 } 
-                else if (rating === 2) { // Difícil
+                else if (rating === 2) { 
                     dueMinutes = Math.floor((STEPS[step] || STEPS[0] || 1) * 1.5);
                     if (dueMinutes < 1) dueMinutes = 1;
                     newState = state === 'new' ? 'learning' : state;
                 } 
-                else if (rating === 3) { // Bom
+                else if (rating === 3) { 
                     if (step < STEPS.length - 1) {
-                        newStep = step + 1;
-                        dueMinutes = STEPS[newStep];
-                        newState = state === 'new' ? 'learning' : state;
-                    } else { // Graduou!
+                        newStep = step + 1; dueMinutes = STEPS[newStep]; newState = state === 'new' ? 'learning' : state;
+                    } else { 
                         newInterval = algorithm === 'fsrs' ? fsrsResult.nextInterval : (state === 'relearning' ? Math.max(1, interval) : GRADUATING_INTERVAL);
-                        newState = 'review';
-                        newStep = 0;
+                        newState = 'review'; newStep = 0;
                     }
                 } 
-                else if (rating === 4) { // Fácil
+                else if (rating === 4) { 
                     newInterval = algorithm === 'fsrs' ? fsrsResult.nextInterval : (state === 'relearning' ? Math.max(1, interval + 1) : EASY_INTERVAL);
-                    newState = 'review';
-                    newStep = 0;
+                    newState = 'review'; newStep = 0;
                 }
             } 
             else if (state === 'review') {
                 if (algorithm === 'fsrs') {
                     if (rating === 1) {
-                        // FSRS: Queda severa na estabilidade e volta para relearning. Intervalo retido é o novo cálculo do FSRS pós-queda.
                         newInterval = fsrsResult.nextInterval; 
-                        newState = 'relearning';
-                        newStep = 0;
-                        dueMinutes = 10;
+                        newState = 'relearning'; newStep = 0; dueMinutes = STEPS[1] || 10;
                     } else {
                         newInterval = applyFuzz(fsrsResult.nextInterval);
                         newState = 'review';
                     }
                 } 
                 else {
-                    // SM-2 Clássico
                     if (rating === 1) { 
-                        newEase = Math.max(MIN_EASE, ease - 0.15);
-                        newInterval = Math.max(1, Math.floor(interval * 0.35)); 
-                        newState = 'relearning';
-                        newStep = 0;
-                        dueMinutes = 10;
+                        newEase = Math.max(MIN_EASE, ease - 0.15); newInterval = Math.max(1, Math.floor(interval * 0.35)); 
+                        newState = 'relearning'; newStep = 0; dueMinutes = STEPS[1] || 10;
                     } 
-                    else if (rating === 2) { 
-                        newEase = Math.max(MIN_EASE, ease - 0.15);
-                        newInterval = applyFuzz(Math.max(interval + 1, Math.floor(interval * 1.2)));
-                    } 
-                    else if (rating === 3) { 
-                        newInterval = applyFuzz(Math.max(interval + 1, Math.floor(interval * ease)));
-                    } 
-                    else if (rating === 4) { 
-                        newEase = ease + 0.15;
-                        newInterval = applyFuzz(Math.max(interval + 1, Math.floor(interval * ease * 1.3)));
-                    }
+                    else if (rating === 2) { newEase = Math.max(MIN_EASE, ease - 0.15); newInterval = applyFuzz(Math.max(interval + 1, Math.floor(interval * 1.2))); } 
+                    else if (rating === 3) { newInterval = applyFuzz(Math.max(interval + 1, Math.floor(interval * ease))); } 
+                    else if (rating === 4) { newEase = ease + 0.15; newInterval = applyFuzz(Math.max(interval + 1, Math.floor(interval * ease * 1.3))); }
                 }
             }
 
-            // Cálculo da Data Final
             const now = new Date();
             let dueDate = new Date();
             let requeue = false;
@@ -402,22 +367,23 @@
 
         // --- COMPONENTS ---
         
-        // MODAL DE CONFIGURAÇÕES GLOBAIS (FSRS vs SM-2)
+        // MODAL DE CONFIGURAÇÕES GLOBAIS (FSRS vs SM-2 & Learning Profile)
         const SettingsModal = ({ isOpen, onClose, userStats, setUserStats, user }) => {
             if (!isOpen) return null;
             
             const [algorithm, setAlgorithm] = React.useState(userStats?.algorithm || 'sm2');
             const [fsrsRetention, setFsrsRetention] = React.useState((userStats?.fsrsRetention || 0.90) * 100);
+            const [learningProfile, setLearningProfile] = React.useState(userStats?.learningProfile || 'standard');
             const [isSaving, setIsSaving] = React.useState(false);
 
             const handleSave = async () => {
                 setIsSaving(true);
                 const retentionDecimal = fsrsRetention / 100;
-                const newStats = { ...userStats, algorithm, fsrsRetention: retentionDecimal };
+                const newStats = { ...userStats, algorithm, fsrsRetention: retentionDecimal, learningProfile };
                 setUserStats(newStats);
                 
                 try {
-                    await setDoc(doc(db, 'leaderboard', user.uid), { algorithm, fsrsRetention: retentionDecimal }, { merge: true });
+                    await setDoc(doc(db, 'leaderboard', user.uid), { algorithm, fsrsRetention: retentionDecimal, learningProfile }, { merge: true });
                 } catch(e) { console.error("Error saving settings", e); }
                 
                 setIsSaving(false);
@@ -426,15 +392,34 @@
 
             return (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-slate-900 border border-slate-700 p-6 md:p-8 rounded-2xl w-full max-w-lg shadow-2xl relative">
+                    <div className="bg-slate-900 border border-slate-700 p-6 md:p-8 rounded-2xl w-full max-w-lg shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
-                        <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2"><Sliders size={24} className="text-blue-500"/> Configurações do Engine</h2>
-                        <p className="text-sm text-slate-400 mb-6">Ajuste a inteligência artificial de agendamento do L1 Cache.</p>
+                        <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2"><Sliders size={24} className="text-blue-500"/> Configurações Neuro-Adaptativas</h2>
+                        <p className="text-sm text-slate-400 mb-6">Ajuste os parâmetros de Inteligência Artificial e Retenção.</p>
                         
                         <div className="space-y-6">
+                            
+                            {/* Learning Profile Toggle */}
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                <label className="block text-slate-300 text-sm uppercase font-bold mb-3 flex items-center gap-2"><TerminalSquare size={16}/> Perfil de Neuroplasticidade (Curto Prazo)</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <button onClick={() => setLearningProfile('standard')} className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden ${learningProfile === 'standard' ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+                                        {learningProfile === 'standard' && <div className="absolute top-0 right-0 w-8 h-8 bg-blue-500 rounded-bl-full flex items-start justify-end p-1.5"><Check size={12} className="text-white"/></div>}
+                                        <div className={`font-bold ${learningProfile === 'standard' ? 'text-blue-400' : 'text-slate-300'}`}>Padrão Universitário</div>
+                                        <div className="text-xs text-slate-500 mt-1 font-mono">[1m, 10m, 1h]</div>
+                                    </button>
+                                    <button onClick={() => setLearningProfile('fragile')} className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden ${learningProfile === 'fragile' ? 'bg-orange-600/20 border-orange-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+                                        {learningProfile === 'fragile' && <div className="absolute top-0 right-0 w-8 h-8 bg-orange-500 rounded-bl-full flex items-start justify-end p-1.5"><Check size={12} className="text-white"/></div>}
+                                        <div className={`font-bold ${learningProfile === 'fragile' ? 'text-orange-400' : 'text-slate-300'}`}>Alta Fadiga / Medicação</div>
+                                        <div className="text-xs text-slate-500 mt-1 font-mono">[1m, 3m, 10m, 30m, 1h]</div>
+                                        <div className="text-[10px] text-orange-500 mt-1 leading-tight">Ancora a memória mais vezes antes do decaimento.</div>
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Algorithm Toggle */}
                             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-                                <label className="block text-slate-300 text-sm uppercase font-bold mb-3 flex items-center gap-2"><BrainCircuit size={16}/> Algoritmo de Repetição</label>
+                                <label className="block text-slate-300 text-sm uppercase font-bold mb-3 flex items-center gap-2"><BrainCircuit size={16}/> Algoritmo de Agendamento</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <button onClick={() => setAlgorithm('sm2')} className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden ${algorithm === 'sm2' ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
                                         {algorithm === 'sm2' && <div className="absolute top-0 right-0 w-8 h-8 bg-blue-500 rounded-bl-full flex items-start justify-end p-1.5"><Check size={12} className="text-white"/></div>}
@@ -443,8 +428,8 @@
                                     </button>
                                     <button onClick={() => setAlgorithm('fsrs')} className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden ${algorithm === 'fsrs' ? 'bg-emerald-600/20 border-emerald-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
                                         {algorithm === 'fsrs' && <div className="absolute top-0 right-0 w-8 h-8 bg-emerald-500 rounded-bl-full flex items-start justify-end p-1.5"><Check size={12} className="text-white"/></div>}
-                                        <div className={`font-bold ${algorithm === 'fsrs' ? 'text-emerald-400' : 'text-slate-300'}`}>FSRS v4 (A.I.)</div>
-                                        <div className="text-xs text-slate-500 mt-1 line-clamp-2">Machine learning dinâmico adaptado às suas falhas de memória.</div>
+                                        <div className={`font-bold ${algorithm === 'fsrs' ? 'text-emerald-400' : 'text-slate-300'}`}>FSRS v4 (I.A)</div>
+                                        <div className="text-xs text-slate-500 mt-1 line-clamp-2">Machine learning dinâmico adaptado às suas falhas.</div>
                                     </button>
                                 </div>
                             </div>
@@ -455,18 +440,18 @@
                                     <label className="text-slate-300 text-sm uppercase font-bold flex items-center gap-2"><Target size={16}/> Retenção Desejada (FSRS)</label>
                                     <span className="font-mono font-bold text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded border border-emerald-500/20">{fsrsRetention}%</span>
                                 </div>
-                                <p className="text-xs text-slate-500 mb-4">Ajuste probabilístico de quanto da matéria você quer lembrar. Exige mais revisões quanto maior for a %.</p>
+                                <p className="text-xs text-slate-500 mb-4">Ajuste probabilístico para compensar a curva de esquecimento induzida por medicamentos ou exaustão de provas.</p>
                                 <input type="range" min="80" max="97" value={fsrsRetention} onChange={(e) => setFsrsRetention(Number(e.target.value))} className="w-full mb-2" />
                                 <div className="flex justify-between text-[10px] text-slate-500 font-mono font-bold">
                                     <span>80% (Mais Rápido)</span>
                                     <span>90% (Recomendado)</span>
-                                    <span>97% (Alta Carga)</span>
+                                    <span>97% (Blindagem Máxima)</span>
                                 </div>
                             </div>
 
                             <button onClick={handleSave} disabled={isSaving} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-all flex justify-center items-center gap-2">
                                 {isSaving ? <RotateCcw size={18} className="animate-spin" /> : <Save size={18}/>} 
-                                {isSaving ? 'Salvando...' : 'Aplicar Configurações'}
+                                {isSaving ? 'Gravando Alterações...' : 'Aplicar Neuromodulação'}
                             </button>
                         </div>
                     </div>
@@ -487,8 +472,12 @@
             else if (secondsToday >= 60) timeFormat = `${(secondsToday / 60).toFixed(2).replace('.', ',')} minuto${secondsToday / 60 >= 2 ? 's' : ''}`;
 
             return (
-                <div className="text-center text-slate-400 mt-8 mb-4 font-medium text-sm animate-fade-in bg-slate-900/50 py-3 rounded-lg border border-slate-800">
-                    Estudado(s) <strong className="text-white">{cardsSeenToday}</strong> {cardsSeenToday === 1 ? 'cartão' : 'cartões'} em <strong className="text-white">{timeFormat}</strong> hoje ({speed.toString().replace('.', ',')}s/card)
+                <div className="text-center text-slate-400 mt-8 mb-4 font-medium text-sm animate-fade-in bg-slate-900/50 py-3 rounded-lg border border-slate-800 flex flex-col items-center justify-center gap-2">
+                    <span>Estudado(s) <strong className="text-white">{cardsSeenToday}</strong> {cardsSeenToday === 1 ? 'cartão' : 'cartões'} em <strong className="text-white">{timeFormat}</strong> hoje ({speed.toString().replace('.', ',')}s/card)</span>
+                    <div className="flex gap-2 items-center flex-wrap justify-center mt-1">
+                        <span className="text-[10px] bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-slate-500 font-mono flex items-center gap-1.5"><BrainCircuit size={12}/> Engine: {userStats?.algorithm === 'fsrs' ? `FSRS (${((userStats?.fsrsRetention || 0.9)*100).toFixed(0)}%)` : 'SM-2'}</span>
+                        <span className="text-[10px] bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-slate-500 font-mono flex items-center gap-1.5"><TerminalSquare size={12}/> Passos: {userStats?.learningProfile === 'fragile' ? 'Alta Fadiga' : 'Padrão'}</span>
+                    </div>
                 </div>
             );
         };
@@ -572,11 +561,46 @@
             const [cardStartTime, setCardStartTime] = React.useState(Date.now());
             const [requeueNotice, setRequeueNotice] = React.useState(null);
             
+            // v2.0: Scratchpad para Active Recall Mecânico
+            const [scratchpadText, setScratchpadText] = React.useState("");
+
+            // v2.0: Focus Timer (Pomodoro) - Proteção contra Fadiga Cognitiva
+            const INITIAL_FOCUS_TIME = 25 * 60; // 25 Minutos
+            const [timeLeft, setTimeLeft] = React.useState(INITIAL_FOCUS_TIME);
+            const [isTimerAlert, setIsTimerAlert] = React.useState(false);
+            
             const [feedbackPulse, setFeedbackPulse] = React.useState({ active: false, color: 'transparent' });
             const progress = queue.length > 0 ? ((index) / queue.length) * 100 : 100;
 
             const currentAlgorithm = userStats?.algorithm || 'sm2';
             const currentRetention = userStats?.fsrsRetention || 0.90;
+            const currentLearningProfile = userStats?.learningProfile || 'standard';
+
+            // Timer Logic
+            React.useEffect(() => {
+                if (finished) return;
+                const timer = setInterval(() => {
+                    setTimeLeft((prev) => {
+                        if (prev <= 1) {
+                            setIsTimerAlert(true);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+                return () => clearInterval(timer);
+            }, [finished]);
+
+            const formatTimer = (seconds) => {
+                const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const s = (seconds % 60).toString().padStart(2, '0');
+                return `${m}:${s}`;
+            };
+
+            const resetTimer = () => {
+                setTimeLeft(INITIAL_FOCUS_TIME);
+                setIsTimerAlert(false);
+            };
 
             const handleFlip = () => { AudioEngine.play('flip'); setIsFlipped(true); };
 
@@ -587,13 +611,13 @@
             };
 
             const card = queue[index];
-            const currentData = card?.tempReviewData || (card ? reviews[card.id] : null) || { interval: 0, ease: STARTING_EASE, s: 0, d: 0, state: 'new', step: 0 };
+            const currentData = card?.tempReviewData || (card ? reviews[card.id] : null) || { interval: 0, difficulty: NaN, stability: NaN, ease: STARTING_EASE, state: 'new', step: 0 };
             
             const options = { 
-                1: calculateNextReview(1, currentData, currentAlgorithm, currentRetention), 
-                2: calculateNextReview(2, currentData, currentAlgorithm, currentRetention), 
-                3: calculateNextReview(3, currentData, currentAlgorithm, currentRetention), 
-                4: calculateNextReview(4, currentData, currentAlgorithm, currentRetention) 
+                1: calculateNextReview(1, currentData, currentAlgorithm, currentRetention, currentLearningProfile), 
+                2: calculateNextReview(2, currentData, currentAlgorithm, currentRetention, currentLearningProfile), 
+                3: calculateNextReview(3, currentData, currentAlgorithm, currentRetention, currentLearningProfile), 
+                4: calculateNextReview(4, currentData, currentAlgorithm, currentRetention, currentLearningProfile) 
             };
 
             const handleRate = async (rating) => {
@@ -663,6 +687,8 @@
                 }
 
                 setIsFlipped(false);
+                setScratchpadText(""); // Reset scratchpad for next card
+                
                 if (index < queue.length - 1) {
                     setIndex(index + 1);
                 } else {
@@ -673,6 +699,16 @@
 
             React.useEffect(() => {
                 const handleKeyDown = (e) => {
+                    // Prevenir ações de teclado se estiver focado em um input/textarea (como o scratchpad)
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                        // Permite Ctrl+Enter para virar o card rápido enquanto digita
+                        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                            e.preventDefault();
+                            if (!isFlipped) handleFlip();
+                        }
+                        return; 
+                    }
+
                     if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); handleUndo(); return; }
                     if (finished) return;
                     if (e.code === 'Space') { 
@@ -697,7 +733,7 @@
                         <div className="absolute top-0 left-0 w-full p-4 flex justify-start"><button onClick={handleUndo} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 border border-slate-700 text-sm"><Undo2 size={16} /> Desfazer Último</button></div>
                         <div className="w-24 h-24 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 mb-6 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.2)]"><Check size={48} /></div>
                         <h2 className="text-3xl font-bold text-white mb-2">Buffer Limpo</h2>
-                        <p className="text-slate-400 mb-8">Sessão completa. Consistência é a chave para a consolidação da memória longa.</p>
+                        <p className="text-slate-400 mb-8">Sessão completa. Matriz Estocástica sincronizada na base de dados.</p>
                         <button onClick={onFinish} className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg border border-slate-700">Voltar ao Dashboard</button>
                     </div>
                 );
@@ -714,6 +750,7 @@
 
             return (
                 <div className="max-w-3xl mx-auto mt-4 h-[80vh] flex flex-col perspective-1000 relative">
+                    
                     {requeueNotice && (
                         <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50 bg-slate-800 text-blue-400 px-4 py-2 rounded-full border border-blue-500/30 shadow-lg text-sm font-bold animate-fade-in flex items-center gap-2">
                             <Repeat size={14} /> {requeueNotice}
@@ -722,7 +759,7 @@
 
                     <div className="w-full h-1 bg-slate-800 rounded-full mb-4 overflow-hidden"><div className="h-full bg-blue-500 transition-all duration-500 ease-out shadow-[0_0_10px_#3b82f6]" style={{ width: `${progress}%` }}></div></div>
                     
-                    {/* Header de Status */}
+                    {/* Header de Status COM FOCUS TIMER */}
                     <div className="flex justify-between items-center text-xs text-slate-500 uppercase tracking-widest mb-4 px-2">
                         <div className="flex items-center gap-4">
                             <button onClick={handleUndo} disabled={index === 0} title="Desfazer (Ctrl+Z)" className={`flex items-center gap-1 transition-colors ${index === 0 ? 'text-slate-700 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}><Undo2 size={16} /> <span className="hidden sm:inline">Desfazer</span></button>
@@ -742,33 +779,81 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            
+                            {/* Focus Timer Element */}
+                            <div onClick={resetTimer} className={`flex items-center gap-1.5 px-2 py-1 rounded border font-mono font-bold cursor-pointer transition-colors ${isTimerAlert ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'}`} title="Focus Timer (Clique para resetar)">
+                                <Timer size={14} />
+                                {formatTimer(timeLeft)}
+                            </div>
+
                             {getStateBadge()}
+                            
                             {userStats && userStats.currentStreak > 2 && (
                                 <div className="flex items-center gap-1 text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-orange-500/20 animate-pulse-slow">
                                     <Flame size={12} /> Streak: {userStats.currentStreak}
                                 </div>
                             )}
+
                             <div className="flex items-center gap-2 font-mono"><Layers size={14} className="text-slate-600"/><span>{queue.length - index} restantes</span></div>
                         </div>
                     </div>
                     
-                    <div className="relative flex-1 group z-10">
+                    {/* Container Principal do Card */}
+                    <div className="relative flex-1 group z-10 flex flex-col">
                         <div 
-                            className={`w-full h-full duration-500 transform-style-3d transition-all relative rounded-3xl ${isFlipped ? 'rotate-y-180' : ''}`}
-                            style={{ boxShadow: feedbackPulse.active ? `0 0 60px 10px ${feedbackPulse.color}, inset 0 0 20px ${feedbackPulse.color}` : '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}
+                            className={`w-full flex-1 duration-500 transform-style-3d transition-all relative rounded-3xl ${isFlipped ? 'rotate-y-180' : ''}`}
+                            style={{
+                                boxShadow: feedbackPulse.active ? `0 0 60px 10px ${feedbackPulse.color}, inset 0 0 20px ${feedbackPulse.color}` : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                            }}
                         >
                             {/* FRENTE */}
-                            <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col items-center text-center overflow-hidden bg-slate-900">
+                            <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col overflow-hidden bg-slate-900">
                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
-                                <div className="flex-1 w-full flex items-center justify-center overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4 flex flex-col items-center justify-center"><div className="prose prose-invert prose-lg md:prose-2xl font-medium text-white select-text w-full max-w-none leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.front || ''}}></div></div></div>
-                                <button onClick={handleFlip} className="mt-6 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar (Espaço)</span></button>
+                                
+                                {/* Question Content */}
+                                <div className="w-full max-h-[50%] overflow-y-auto custom-scrollbar px-2 mb-4 pb-4 border-b border-slate-800">
+                                    <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center" dangerouslySetInnerHTML={{__html: card.front || ''}}></div>
+                                </div>
+
+                                {/* Active Recall Scratchpad */}
+                                <div className="flex-1 flex flex-col">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 flex items-center gap-1"><TerminalSquare size={12}/> Evocação Ativa (Digite o que lembrar)</label>
+                                    <textarea 
+                                        className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-green-400 font-mono focus:outline-none focus:border-blue-500/50 resize-none transition-colors"
+                                        placeholder=">> Digite o código, conceito ou palavra-chave..."
+                                        value={scratchpadText}
+                                        onChange={(e) => setScratchpadText(e.target.value)}
+                                        spellCheck="false"
+                                    ></textarea>
+                                </div>
+
+                                <button onClick={handleFlip} className="mt-4 bg-slate-800 hover:bg-slate-700 text-blue-400 px-8 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 border border-slate-700 hover:border-blue-500/50 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] group shrink-0 z-10 w-full"><Eye size={18} className="group-hover:scale-110 transition-transform" /> <span className="text-sm">Revelar Resposta (Espaço / Ctrl+Enter)</span></button>
                             </div>
 
                             {/* VERSO */}
                             <div className={`absolute inset-0 backface-hidden rotate-y-180 glass border-2 border-blue-500/30 rounded-3xl p-6 md:p-8 flex flex-col items-center overflow-hidden bg-slate-900 transition-opacity duration-300 ${isFlipped ? 'opacity-100' : 'opacity-0'}`}>
                                  <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Resposta" onClick={(e) => { e.stopPropagation(); speakText(card.back); }}><Volume2 size={24} /></div>
-                                <div className="w-full border-b border-slate-800/80 pb-4 mb-4 text-center shrink-0"><span className="text-[10px] uppercase text-slate-600 font-bold tracking-widest block mb-1">Contexto (Pergunta)</span><div className="text-sm text-slate-400 opacity-70 line-clamp-2 px-4" dangerouslySetInnerHTML={{__html: card.front}}></div></div>
-                                <div className="flex-1 w-full overflow-hidden relative"><div className="w-full max-h-full overflow-y-auto custom-scrollbar px-4"><div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.back || ''}}></div></div></div>
+                                
+                                <div className="w-full border-b border-slate-800/80 pb-4 mb-4 text-center shrink-0">
+                                    <span className="text-[10px] uppercase text-slate-600 font-bold tracking-widest block mb-1">Contexto (Pergunta)</span>
+                                    <div className="text-sm text-slate-400 opacity-70 line-clamp-2 px-4" dangerouslySetInnerHTML={{__html: card.front}}></div>
+                                </div>
+
+                                <div className="flex-1 w-full overflow-y-auto custom-scrollbar px-2 flex flex-col gap-6">
+                                    {/* Mostrar o que o usuário tentou lembrar se o scratchpad não estiver vazio */}
+                                    {scratchpadText.trim() && (
+                                        <div className="w-full bg-slate-950/50 border border-slate-800 p-4 rounded-xl">
+                                            <span className="text-[10px] uppercase text-slate-500 font-bold tracking-widest block mb-2">Sua Evocação:</span>
+                                            <pre className="text-sm font-mono text-green-400/70 whitespace-pre-wrap m-0 p-0 bg-transparent border-none shadow-none">{scratchpadText}</pre>
+                                        </div>
+                                    )}
+
+                                    {/* Resposta Real */}
+                                    <div className="w-full">
+                                        <span className="text-[10px] uppercase text-blue-500/50 font-bold tracking-widest block mb-2 text-center">Resposta Gabarito:</span>
+                                        <div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: card.back || ''}}></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -903,16 +988,16 @@
                     <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[100px] pointer-events-none"></div>
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
-                            <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><Cpu size={32} /></div>
-                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">v1.5</span></h1>
-                            <p className="text-slate-400 text-sm">Engine Híbrido: SM-2 e FSRS (A.I.) otimizado para Ciência da Computação.</p>
+                            <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30"><BrainCircuit size={32} /></div>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">L1 Cache <span className="text-blue-400">v2.0</span></h1>
+                            <p className="text-slate-400 text-sm">Algoritmos SM-2 & FSRS (I.A) nativos para retenção de ciências da computação.</p>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="space-y-3">
                                 <input type="email" placeholder="Email Acadêmico" className="w-full bg-slate-900/50 border border-slate-700 focus:border-blue-500 p-3 rounded-xl text-white outline-none transition-all placeholder:text-slate-600" value={email} onChange={e => setEmail(e.target.value)} />
                                 <input type="password" placeholder="Senha" className="w-full bg-slate-900/50 border border-slate-700 focus:border-blue-500 p-3 rounded-xl text-white outline-none transition-all placeholder:text-slate-600" value={password} onChange={e => setPassword(e.target.value)} />
                             </div>
-                            <button disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-all transform hover:scale-[1.02] disabled:opacity-50">{loading ? "Carregando Módulos..." : (isRegister ? "Registrar Matrícula" : "Login no Sistema")}</button>
+                            <button disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-all transform hover:scale-[1.02] disabled:opacity-50">{loading ? "Carregando Algoritmo..." : (isRegister ? "Registrar Matrícula" : "Login no Sistema")}</button>
                         </form>
                         <div className="mt-6 flex justify-between text-sm text-slate-500 pt-4 border-t border-slate-700/50">
                             <button onClick={() => setIsRegister(!isRegister)} className="hover:text-blue-400 transition-colors">{isRegister ? "Já tenho conta" : "Criar nova conta"}</button>
@@ -934,44 +1019,58 @@
                 for (let i = 0; i < 31; i++) {
                     const targetDate = new Date(today);
                     targetDate.setDate(targetDate.getDate() - i);
-                    const dateStr = getLocalDateString(targetDate);
-                    if (dailyActivity[dateStr]) total += dailyActivity[dateStr];
+                    const dateStr = getLocalDateString(targetDate); 
+                    if (dailyActivity[dateStr]) {
+                        total += dailyActivity[dateStr];
+                    }
                 }
                 return total;
             };
 
             const handleDeleteUser = async (userId, userEmail) => {
-                if (confirm(`ADMIN: Tem certeza absoluta que deseja excluir o usuário ${userEmail}?`)) {
+                if (confirm(`ADMIN: Tem certeza absoluta que deseja excluir o usuário ${userEmail} do ranking diário? Isso apagará o progresso visível dele na tabela permanentemente.`)) {
                     try {
                         await deleteDoc(doc(db, 'leaderboard', userId));
                         alert('Usuário removido do ranking com sucesso.');
-                    } catch (e) { alert("Erro ao remover: " + e.message); }
+                    } catch (e) {
+                        alert("Erro ao remover: " + e.message);
+                    }
                 }
             };
 
             React.useEffect(() => {
                 const q = query(collection(db, 'leaderboard'));
                 const unsub = onSnapshot(q, (snap) => {
-                    const todayStr = getLocalDateString();
+                    const todayStr = getLocalDateString(); 
+                    
                     const fetchedLeaders = snap.docs.map(d => {
                         const data = d.data();
+                        
                         const cardsSeenToday = (data.dailyActivity && data.dailyActivity[todayStr]) || 0;
                         const timeStudiedToday = (data.dailyTime && data.dailyTime[todayStr]) || 0;
                         const correctToday = (data.dailyCorrect && data.dailyCorrect[todayStr]) || 0;
+                        
                         const dailyRetention = cardsSeenToday > 0 ? (correctToday / cardsSeenToday) * 100 : 0;
+
                         return {
-                            id: d.id, email: data.email, ...data,
-                            cardsSeenToday, timeStudiedToday,
+                            id: d.id, 
+                            email: data.email,
+                            ...data,
+                            cardsSeenToday: cardsSeenToday,
+                            timeStudiedToday: timeStudiedToday,
                             retention: cardsSeenToday > 0 ? dailyRetention : (data.retention || 0), 
                             currentStreak: data.currentStreak || 0,
                             dailyActivity: data.dailyActivity || {},
                             dailyTime: data.dailyTime || {}
                         };
-                    }).filter(u => u.email && u.email !== 'Anônimo' && u.email.includes('@'));
+                    }).filter(u => u.email && u.email !== 'Anônimo' && u.email.includes('@')); 
                     
                     setLeaders(fetchedLeaders.sort((a,b) => (b.cardsSeenToday - a.cardsSeenToday) || (b.retention - a.retention)).slice(0, 50));
                     setLoading(false);
-                }, (error) => { console.error("Erro Leaderboard:", error); setLoading(false); });
+                }, (error) => {
+                    console.error("Erro Leaderboard onSnapshot:", error);
+                    setLoading(false);
+                });
 
                 return () => unsub(); 
             }, []);
@@ -981,6 +1080,8 @@
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 p-6 glass rounded-2xl border border-slate-700/50">
                         <div className="flex items-center gap-4">
                             <div className="p-4 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 shadow-[0_0_20px_rgba(234,179,8,0.1)] relative">
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
                                 <Trophy className="text-yellow-500" size={32}/>
                             </div>
                             <div>
@@ -996,11 +1097,11 @@
                                 <tr>
                                     <th className="p-4 md:p-5 border-b border-slate-800 text-center w-16">Rank</th>
                                     <th className="p-4 md:p-5 border-b border-slate-800">Estudante</th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1"><Layers size={14}/> Hoje (Cards)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1"><Clock size={14}/> Hoje (Tempo)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1 text-orange-500"><Flame size={14}/> Streak</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1"><Target size={14}/> Retenção (Diária)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center"><div className="flex items-center justify-center gap-1 text-slate-500"><TrendingUp size={14}/> Últ. 31 Dias</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados apenas HOJE"><div className="flex items-center justify-center gap-1"><Layers size={14}/> Hoje (Cards)</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Tempo estudado apenas HOJE"><div className="flex items-center justify-center gap-1"><Clock size={14}/> Hoje (Tempo)</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Streak da sessão diária"><div className="flex items-center justify-center gap-1 text-orange-500"><Flame size={14}/> Streak</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Retenção exclusiva do dia de hoje"><div className="flex items-center justify-center gap-1"><Target size={14}/> Retenção (Diária)</div></th>
+                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados nos últimos 31 dias"><div className="flex items-center justify-center gap-1 text-slate-500"><TrendingUp size={14}/> Últ. 31 Dias (Volume)</div></th>
                                     {isAdmin && <th className="p-4 md:p-5 border-b border-slate-800 text-center text-red-500">Admin</th>}
                                 </tr>
                             </thead>
@@ -1009,14 +1110,38 @@
                                     <tr><td colSpan={isAdmin ? "8" : "7"} className="p-8 text-center text-slate-500">Sincronizando dados ao vivo...</td></tr>
                                 ) : leaders.map((l, i) => (
                                     <tr key={l.id} className={`transition-colors hover:bg-slate-800/40 ${i === 0 ? 'bg-yellow-500/5' : i === 1 ? 'bg-slate-400/5' : i === 2 ? 'bg-amber-700/5' : ''}`}>
-                                        <td className="p-4 md:p-5 text-center font-bold text-slate-500 font-mono text-lg">{i === 0 ? <span className="text-yellow-500">1</span> : i === 1 ? <span className="text-slate-300">2</span> : i === 2 ? <span className="text-amber-600">3</span> : i+1}</td>
-                                        <td className="p-4 md:p-5 text-white font-medium flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">{l.email ? l.email.charAt(0).toUpperCase() : '?'}</div>{l.email ? l.email.split('@')[0] : 'Anônimo'}</td>
+                                        <td className="p-4 md:p-5 text-center font-bold text-slate-500 font-mono text-lg">
+                                            {i === 0 ? <span className="text-yellow-500">1</span> : i === 1 ? <span className="text-slate-300">2</span> : i === 2 ? <span className="text-amber-600">3</span> : i+1}
+                                        </td>
+                                        <td className="p-4 md:p-5 text-white font-medium flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">
+                                                {l.email ? l.email.charAt(0).toUpperCase() : '?'}
+                                            </div>
+                                            {l.email ? l.email.split('@')[0] : 'Anônimo'}
+                                        </td>
                                         <td className="p-4 md:p-5 text-center text-blue-400 font-mono font-bold">{l.cardsSeenToday.toLocaleString('pt-BR')}</td>
                                         <td className="p-4 md:p-5 text-center text-slate-300 font-mono text-sm">{formatDuration(l.timeStudiedToday)}</td>
-                                        <td className="p-4 md:p-5 text-center"><span className={`inline-flex items-center gap-1 font-mono font-bold ${l.currentStreak >= 3 ? 'text-orange-500' : 'text-slate-500'}`}>{l.currentStreak > 0 && <Flame size={12} className={l.currentStreak >= 3 ? 'animate-pulse' : ''}/>} {l.currentStreak}</span></td>
-                                        <td className="p-4 md:p-5 text-center"><span className={`px-3 py-1 rounded-full text-xs font-bold border inline-block min-w-[60px] ${l.retention > 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : l.retention > 50 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>{l.retention ? l.retention.toFixed(1) : 0}%</span></td>
+                                        <td className="p-4 md:p-5 text-center">
+                                            <span className={`inline-flex items-center gap-1 font-mono font-bold ${l.currentStreak >= 3 ? 'text-orange-500' : 'text-slate-500'}`}>
+                                                {l.currentStreak > 0 && <Flame size={12} className={l.currentStreak >= 3 ? 'animate-pulse' : ''}/>} 
+                                                {l.currentStreak}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 md:p-5 text-center">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-bold border inline-block min-w-[60px] ${l.retention > 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : l.retention > 50 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                                                {l.retention ? l.retention.toFixed(1) : 0}%
+                                            </span>
+                                        </td>
                                         <td className="p-4 md:p-5 text-center text-slate-400 font-mono text-sm">{calculateLast31Days(l.dailyActivity).toLocaleString('pt-BR')}</td>
-                                        {isAdmin && <td className="p-4 md:p-5 text-center"><button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500 p-2 rounded hover:bg-red-500/10 transition-colors"><Trash2 size={16} /></button></td>}
+                                        
+                                        {/* COLUNA DE EXCLUSÃO PARA ADMIN */}
+                                        {isAdmin && (
+                                            <td className="p-4 md:p-5 text-center">
+                                                <button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500 p-2 rounded hover:bg-red-500/10 transition-colors" title="Deletar este usuário do ranking">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -1038,6 +1163,7 @@
             const [searchTerm, setSearchTerm] = React.useState('');
 
             const [selectedCardIds, setSelectedCardIds] = React.useState(new Set());
+            
             const [bulkForm, setBulkForm] = React.useState({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] });
             const [bulkTagAddInput, setBulkTagAddInput] = React.useState('');
             const [bulkTagRemoveInput, setBulkTagRemoveInput] = React.useState('');
@@ -1052,12 +1178,18 @@
                 const cCat = normalize(c.category).toLowerCase();
                 const cLess = normalize(c.lesson || 'Conteúdo Geral').toLowerCase();
                 const cSub = normalize(c.subcategory || 'Geral').toLowerCase();
+                const cTags = c.tags || [];
+
                 const matchCategory = filterCategory === 'Todos' || cCat === filterCategory.toLowerCase();
                 const matchLesson = filterLesson === 'Todos' || cLess === filterLesson.toLowerCase();
                 const matchSubcategory = filterSubcategory === 'Todos' || cSub === filterSubcategory.toLowerCase();
-                const matchTag = filterTag === 'Todas' || (c.tags || []).some(t => String(t).toLowerCase() === filterTag.toLowerCase());
+                const matchTag = filterTag === 'Todas' || cTags.some(t => String(t).toLowerCase() === filterTag.toLowerCase());
+                
                 const searchLower = searchTerm.toLowerCase();
-                const matchSearch = searchTerm === '' || (c.front || '').toLowerCase().includes(searchLower) || (c.back || '').toLowerCase().includes(searchLower);
+                const matchSearch = searchTerm === '' || 
+                                    (c.front || '').toLowerCase().includes(searchLower) || 
+                                    (c.back || '').toLowerCase().includes(searchLower);
+                
                 return matchCategory && matchLesson && matchSubcategory && matchTag && matchSearch;
             });
 
@@ -1065,27 +1197,35 @@
 
             const handleToggleSelection = (id) => {
                 const newSelection = new Set(selectedCardIds);
-                if (newSelection.has(id)) newSelection.delete(id); else newSelection.add(id);
+                if (newSelection.has(id)) newSelection.delete(id);
+                else newSelection.add(id);
                 setSelectedCardIds(newSelection);
             };
 
             const handleToggleAllFiltered = () => {
-                const newSelection = new Set(selectedCardIds);
-                if (allFilteredSelected) filteredCards.forEach(c => newSelection.delete(c.id));
-                else filteredCards.forEach(c => newSelection.add(c.id));
-                setSelectedCardIds(newSelection);
+                if (allFilteredSelected) {
+                    const newSelection = new Set(selectedCardIds);
+                    filteredCards.forEach(c => newSelection.delete(c.id));
+                    setSelectedCardIds(newSelection);
+                } else {
+                    const newSelection = new Set(selectedCardIds);
+                    filteredCards.forEach(c => newSelection.add(c.id));
+                    setSelectedCardIds(newSelection);
+                }
             };
 
             const handleAddBulkTagAdd = (e) => {
                 if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault(); const newTag = bulkTagAddInput.trim().toLowerCase();
+                    e.preventDefault();
+                    const newTag = bulkTagAddInput.trim().toLowerCase();
                     if (newTag && !bulkForm.tagsToAdd.includes(newTag)) setBulkForm(prev => ({ ...prev, tagsToAdd: [...prev.tagsToAdd, newTag] }));
                     setBulkTagAddInput('');
                 }
             };
             const handleAddBulkTagRemove = (e) => {
                 if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault(); const newTag = bulkTagRemoveInput.trim().toLowerCase();
+                    e.preventDefault();
+                    const newTag = bulkTagRemoveInput.trim().toLowerCase();
                     if (newTag && !bulkForm.tagsToRemove.includes(newTag)) setBulkForm(prev => ({ ...prev, tagsToRemove: [...prev.tagsToRemove, newTag] }));
                     setBulkTagRemoveInput('');
                 }
@@ -1094,12 +1234,19 @@
             const handleBulkSubmit = async (e) => {
                 e.preventDefault();
                 if (selectedCardIds.size === 0) return;
+                
                 const idsArray = Array.from(selectedCardIds);
                 const hasChanges = bulkForm.category || bulkForm.lesson || bulkForm.subcategory || bulkForm.tagsToAdd.length > 0 || bulkForm.tagsToRemove.length > 0;
-                if (!hasChanges) { alert("Sem modificações."); return; }
-                if (!confirm(`Modificar ${idsArray.length} flashcards simultaneamente?`)) return;
+                
+                if (!hasChanges) {
+                    alert("Você não definiu nenhuma modificação para os cards selecionados.");
+                    return;
+                }
+
+                if (!confirm(`Você está prestes a modificar simultaneamente ${idsArray.length} flashcards.\nEssa operação não pode ser desfeita facilmente. Confirmar execução em lote?`)) return;
 
                 setIsBulkProcessing(true);
+
                 const chunkSize = 450;
                 let processedCount = 0;
 
@@ -1110,6 +1257,7 @@
                     chunk.forEach(cardId => {
                         const card = cards.find(c => c.id === cardId);
                         if (!card) return;
+
                         const updateData = {};
                         if (bulkForm.category.trim()) updateData.category = normalize(bulkForm.category);
                         if (bulkForm.lesson.trim()) updateData.lesson = normalize(bulkForm.lesson);
@@ -1128,6 +1276,7 @@
                             currentTags = currentTags.filter(t => !bulkForm.tagsToRemove.includes(t));
                             if (currentTags.length !== beforeLen) tagsChanged = true;
                         }
+
                         if (tagsChanged) updateData.tags = currentTags;
 
                         if (Object.keys(updateData).length > 0) {
@@ -1136,8 +1285,13 @@
                         }
                     });
 
-                    try { await batch.commit(); } 
-                    catch (err) { alert("Erro: " + err.message); setIsBulkProcessing(false); return; }
+                    try {
+                        await batch.commit();
+                    } catch (err) {
+                        alert("Erro grave na execução do lote. Apenas processou " + processedCount + " de " + idsArray.length + ".\nErro: " + err.message);
+                        setIsBulkProcessing(false);
+                        return;
+                    }
                 }
 
                 setIsBulkProcessing(false);
@@ -1145,9 +1299,11 @@
                 setBulkForm({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] }); 
             };
 
+
             const handleAddTag = (e) => {
                 if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault(); const newTag = tagInput.trim().toLowerCase();
+                    e.preventDefault();
+                    const newTag = tagInput.trim().toLowerCase();
                     if (newTag && !form.tags.includes(newTag)) setForm(prev => ({ ...prev, tags: [...prev.tags, newTag] }));
                     setTagInput('');
                 }
@@ -1159,29 +1315,46 @@
                 if(!form.front || !form.back) { alert("Preencha Pergunta e Resposta."); return; }
                 try {
                     const dataToSave = {
-                        front: form.front, back: form.back,
-                        category: normalize(form.category || 'Geral'), lesson: normalize(form.lesson || 'Conteúdo Geral'),
-                        subcategory: normalize(form.subcategory || 'Geral'), tags: form.tags 
+                        front: form.front,
+                        back: form.back,
+                        category: normalize(form.category || 'Geral'),
+                        lesson: normalize(form.lesson || 'Conteúdo Geral'),
+                        subcategory: normalize(form.subcategory || 'Geral'),
+                        tags: form.tags 
                     };
-                    if (editingId) { await updateDoc(doc(db, "cards", editingId), dataToSave); setEditingId(null); } 
-                    else { await addDoc(collection(db, "cards"), { ...dataToSave, createdAt: serverTimestamp() }); }
+                    if (editingId) {
+                        await updateDoc(doc(db, "cards", editingId), dataToSave);
+                        setEditingId(null);
+                    } else {
+                        await addDoc(collection(db, "cards"), { ...dataToSave, createdAt: serverTimestamp() });
+                    }
                     setForm(prev => ({ ...prev, front: '', back: '', tags: [] })); 
                 } catch (e) { alert("Erro ao salvar: " + e.message); }
             };
 
             const handleEditCard = (card) => { 
-                if (selectedCardIds.size > 0) { handleToggleSelection(card.id); return; }
-                setForm({ front: card.front, back: card.back, category: normalize(card.category), lesson: normalize(card.lesson || 'Conteúdo Geral'), subcategory: normalize(card.subcategory), tags: card.tags || [] }); 
+                if (selectedCardIds.size > 0) {
+                    handleToggleSelection(card.id);
+                    return;
+                }
+                setForm({
+                    front: card.front, back: card.back,
+                    category: normalize(card.category), lesson: normalize(card.lesson || 'Conteúdo Geral'),
+                    subcategory: normalize(card.subcategory), tags: card.tags || [] 
+                }); 
                 setEditingId(card.id); 
             };
             
             const handleDeleteCard = async (id, e) => { 
                 e.stopPropagation();
-                if(confirm("Deletar irreversivelmente?")) await deleteDoc(doc(db, "cards", id)); 
+                if(confirm("Deletar este card de forma irreversível?")) await deleteDoc(doc(db, "cards", id)); 
             };
+
 
             return (
                 <div className="glass p-6 rounded-2xl border border-slate-700 min-h-screen md:h-[calc(100vh-100px)] flex flex-col shadow-2xl animate-fade-in">
+                    
+                    {/* CABEÇALHO UNIFICADO */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b border-slate-700 pb-4 flex-shrink-0 gap-4">
                         <div className="flex items-center gap-3">
                             <Lock size={20} className="text-amber-500"/>
@@ -1195,9 +1368,13 @@
 
                     <div className="flex-1 overflow-hidden flex flex-col">
                         <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden h-full">
+                            
+                            {/* COLUNA ESQUERDA: LISTAGEM E FILTROS */}
                             <div className="w-full md:w-[45%] lg:w-1/3 flex flex-col border-b md:border-b-0 md:border-r border-slate-700/50 pb-4 md:pr-4 h-64 md:h-full">
+                                
                                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 mb-3 flex-shrink-0 space-y-3">
                                     <div className="flex items-center gap-2"><Filter size={16} className="text-slate-500" /><span className="text-xs text-slate-400 font-bold uppercase">Filtros</span></div>
+                                    
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                         <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500">
                                             <option value="Todos">Todas Matérias</option>
@@ -1213,25 +1390,34 @@
                                         </select>
                                         <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-purple-500">
                                             <option value="Todas">Qualquer Tag</option>
-                                            {existingAdminTags.map(t => <option key={t} value={t}>#{t}</option>)}
+                                            {existingAdminTags.map(t => <option key={t} value={t}>{t}</option>)}
                                         </select>
                                     </div>
+                                    
                                     <div className="relative">
-                                        <input type="text" placeholder="Buscar no texto..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 placeholder:text-slate-600"/>
+                                        <input type="text" placeholder="Buscar no texto (frente ou verso)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-300 text-sm rounded-lg p-2 pl-8 outline-none focus:border-blue-500 placeholder:text-slate-600"/>
                                         <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500 pointer-events-none"/>
                                     </div>
+                                    
                                     <div className="flex justify-between items-center pt-2 border-t border-slate-800 mt-2">
-                                        <button onClick={handleToggleAllFiltered} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-bold border transition-colors ${allFilteredSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}><ListChecks size={14} /> {allFilteredSelected ? 'Desmarcar Todos' : 'Selecionar Filtro'}</button>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={handleToggleAllFiltered} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-bold border transition-colors ${allFilteredSelected ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}>
+                                                <ListChecks size={14} /> {allFilteredSelected ? 'Desmarcar Todos' : 'Selecionar Filtro'}
+                                            </button>
+                                        </div>
                                         <span className="font-bold text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800 text-slate-400">{filteredCards.length} Cards</span>
                                     </div>
                                 </div>
 
+                                {/* LISTA DE CARDS */}
                                 <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                     {filteredCards.map(c => {
                                         const isSelected = selectedCardIds.has(c.id);
                                         return (
                                             <div key={c.id} onClick={() => handleEditCard(c)} className={`p-3 rounded-lg text-sm border cursor-pointer transition-all group flex gap-3 ${isSelected ? 'bg-blue-900/30 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : editingId === c.id && selectedCardIds.size === 0 ? 'bg-slate-800 border-slate-500' : 'bg-slate-900/40 border-slate-800 hover:border-slate-600'}`}>
-                                                <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); handleToggleSelection(c.id); }}><input type="checkbox" className="admin-checkbox" checked={isSelected} readOnly /></div>
+                                                <div className="pt-0.5" onClick={(e) => { e.stopPropagation(); handleToggleSelection(c.id); }}>
+                                                    <input type="checkbox" className="admin-checkbox" checked={isSelected} readOnly />
+                                                </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex flex-col mb-1">
                                                         <span className="text-blue-400 text-[10px] font-mono uppercase tracking-wider opacity-70 truncate">{c.category}</span>
@@ -1240,7 +1426,9 @@
                                                     <div className="text-slate-300 font-medium line-clamp-2 text-xs opacity-80" dangerouslySetInnerHTML={{__html: (c.front || '').replace(/<[^>]*>?/gm, '')}}></div>
                                                 </div>
                                                 {selectedCardIds.size === 0 && (
-                                                    <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => handleDeleteCard(c.id, e)} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors h-fit" title="Excluir"><Trash2 size={14}/></button></div>
+                                                    <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={(e) => handleDeleteCard(c.id, e)} className="text-red-400 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors h-fit" title="Excluir"><Trash2 size={14}/></button>
+                                                    </div>
                                                 )}
                                             </div>
                                         );
@@ -1249,10 +1437,14 @@
                                 </div>
                             </div>
 
+                            {/* COLUNA DIREITA: FORMULÁRIO (DINÂMICO: SIMPLES OU EM LOTE) */}
                             <div className="flex-1 overflow-y-auto pl-0 md:pl-2 custom-scrollbar pb-20 md:pb-0 h-full">
+                                
                                 {selectedCardIds.size > 0 ? (
+                                    /* --- MODO EDIÇÃO EM MASSA (LOTE) --- */
                                     <form onSubmit={handleBulkSubmit} className="space-y-4 bg-amber-900/10 border border-amber-500/30 p-4 rounded-xl h-full flex flex-col relative overflow-hidden">
                                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+                                        
                                         <div className="flex items-center justify-between mb-2">
                                             <div>
                                                 <h3 className="text-lg font-bold text-amber-500 flex items-center gap-2"><CheckSquare size={20}/> Edição em Lote</h3>
@@ -1260,47 +1452,108 @@
                                             </div>
                                             <button type="button" onClick={() => setSelectedCardIds(new Set())} className="text-slate-400 hover:text-white px-3 py-1 bg-slate-800 rounded-lg text-sm transition-colors border border-slate-700">Cancelar Seleção</button>
                                         </div>
-                                        <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-2 text-xs text-slate-300 flex items-start gap-3"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><p>Campos preenchidos substituirão o conteúdo atual. <strong>Deixe vazio se não quiser alterar.</strong></p></div>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0 border-b border-slate-800 pb-4">
-                                            <div className="space-y-1"><label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Matéria para</label><input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.category} onChange={e => setBulkForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" /></div>
-                                            <div className="space-y-1"><label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Aula para</label><input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.lesson} onChange={e => setBulkForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" /></div>
-                                            <div className="space-y-1"><label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Tópico para</label><input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.subcategory} onChange={e => setBulkForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" /></div>
+
+                                        <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-2 text-xs text-slate-300 flex items-start gap-3">
+                                            <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                                            <p>Qualquer campo preenchido abaixo substituirá o conteúdo atual de todos os {selectedCardIds.size} cards. <strong>Deixe o campo vazio se não quiser alterar a propriedade.</strong></p>
                                         </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0 border-b border-slate-800 pb-4">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Matéria para</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.category} onChange={e => setBulkForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Aula para</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.lesson} onChange={e => setBulkForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Tópico para</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.subcategory} onChange={e => setBulkForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                            </div>
+                                        </div>
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                                            {/* ADICIONAR TAGS */}
                                             <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
                                                 <label className="text-xs font-bold text-emerald-400 uppercase ml-1 mb-2 flex items-center gap-1"><Plus size={14}/> Acoplar Novas Tags</label>
                                                 <div className="flex flex-wrap gap-2 mb-2">
-                                                    {bulkForm.tagsToAdd.map(t => (<span key={t} className="bg-emerald-900/60 text-emerald-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-emerald-500/40">+{t} <button type="button" onClick={() => setBulkForm(prev => ({...prev, tagsToAdd: prev.tagsToAdd.filter(tag => tag !== t)}))} className="hover:text-emerald-100 transition-colors"><X size={14}/></button></span>))}
+                                                    {bulkForm.tagsToAdd.map(t => (
+                                                        <span key={t} className="bg-emerald-900/60 text-emerald-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-emerald-500/40">
+                                                            +{t} <button type="button" onClick={() => setBulkForm(prev => ({...prev, tagsToAdd: prev.tagsToAdd.filter(tag => tag !== t)}))} className="hover:text-emerald-100 transition-colors"><X size={14}/></button>
+                                                        </span>
+                                                    ))}
                                                 </div>
-                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: revisar (Enter)" value={bulkTagAddInput} onChange={e => setBulkTagAddInput(e.target.value)} onKeyDown={handleAddBulkTagAdd} />
+                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: revisar, prova (Enter)" value={bulkTagAddInput} onChange={e => setBulkTagAddInput(e.target.value)} onKeyDown={handleAddBulkTagAdd} list="tag-suggestions" />
                                             </div>
+
+                                            {/* REMOVER TAGS */}
                                             <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex flex-col">
-                                                <label className="text-xs font-bold text-red-400 uppercase ml-1 mb-2 flex items-center gap-1"><Trash2 size={14}/> Remover Tags</label>
+                                                <label className="text-xs font-bold text-red-400 uppercase ml-1 mb-2 flex items-center gap-1"><Trash2 size={14}/> Remover Tags Existentes</label>
                                                 <div className="flex flex-wrap gap-2 mb-2">
-                                                    {bulkForm.tagsToRemove.map(t => (<span key={t} className="bg-red-900/60 text-red-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-red-500/40">-{t} <button type="button" onClick={() => setBulkForm(prev => ({...prev, tagsToRemove: prev.tagsToRemove.filter(tag => tag !== t)}))} className="hover:text-red-100 transition-colors"><X size={14}/></button></span>))}
+                                                    {bulkForm.tagsToRemove.map(t => (
+                                                        <span key={t} className="bg-red-900/60 text-red-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-red-500/40">
+                                                            -{t} <button type="button" onClick={() => setBulkForm(prev => ({...prev, tagsToRemove: prev.tagsToRemove.filter(tag => tag !== t)}))} className="hover:text-red-100 transition-colors"><X size={14}/></button>
+                                                        </span>
+                                                    ))}
                                                 </div>
-                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-red-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: erro (Enter)" value={bulkTagRemoveInput} onChange={e => setBulkTagRemoveInput(e.target.value)} onKeyDown={handleAddBulkTagRemove} />
+                                                <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-red-500 outline-none font-mono text-sm mt-auto placeholder:text-slate-600" placeholder="Ex: desatualizado (Enter)" value={bulkTagRemoveInput} onChange={e => setBulkTagRemoveInput(e.target.value)} onKeyDown={handleAddBulkTagRemove} list="tag-suggestions" />
                                             </div>
                                         </div>
-                                        <div className="pt-4 flex-shrink-0 mt-auto"><button type="submit" disabled={isBulkProcessing} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white font-bold p-4 rounded-xl shadow-lg shadow-amber-900/20 transition-all flex justify-center gap-2 items-center text-lg">{isBulkProcessing ? <RotateCcw className="animate-spin" size={20} /> : <Zap size={20} />} {isBulkProcessing ? 'Executando...' : `Gravar Modificações em ${selectedCardIds.size} Cards`}</button></div>
-                                    </form>
-                                ) : (
-                                    <form onSubmit={handleSaveCard} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col">
-                                        <div className="flex items-center gap-2 mb-2"><Pencil size={18} className="text-blue-500"/><h3 className="text-lg font-bold text-white">{editingId ? 'Editar Card Único' : 'Criar Novo Card'}</h3></div>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
-                                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria (Deck)</label><input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: SO" value={form.category} onChange={e => setForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" /><datalist id="category-suggestions">{existingCategories.map((cat, i) => <option key={i} value={cat} />)}</datalist></div>
-                                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula (Lesson)</label><input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Aula 01" value={form.lesson} onChange={e => setForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" /><datalist id="lesson-suggestions">{existingLessons.map((l, i) => <option key={l} value={l} />)}</datalist></div>
-                                            <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Tópico</label><input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Threads" value={form.subcategory} onChange={e => setForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" /><datalist id="subcategory-suggestions">{existingSubcategories.map((sub, i) => <option key={sub} value={sub} />)}</datalist></div>
+                                        
+                                        <div className="pt-4 flex-shrink-0 mt-auto">
+                                            <button type="submit" disabled={isBulkProcessing} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white font-bold p-4 rounded-xl shadow-lg shadow-amber-900/20 transition-all flex justify-center gap-2 items-center text-lg">
+                                                {isBulkProcessing ? <RotateCcw className="animate-spin" size={20} /> : <Zap size={20} />} 
+                                                {isBulkProcessing ? 'Executando Transações...' : `Gravar Modificações em ${selectedCardIds.size} Cards`}
+                                            </button>
                                         </div>
+                                    </form>
+
+                                ) : (
+
+                                    /* --- MODO CRIAÇÃO/EDIÇÃO ÚNICA (ORIGINAL) --- */
+                                    <form onSubmit={handleSaveCard} className="space-y-4 bg-slate-900/20 p-2 rounded-xl h-full flex flex-col">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Pencil size={18} className="text-blue-500"/>
+                                            <h3 className="text-lg font-bold text-white">{editingId ? 'Editar Card Único' : 'Criar Novo Card'}</h3>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Matéria (Deck)</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Sistemas Operacionais" value={form.category} onChange={e => setForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
+                                                <datalist id="category-suggestions">{existingCategories.map((cat, i) => <option key={i} value={cat} />)}</datalist>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Aula (Lesson)</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Aula 01" value={form.lesson} onChange={e => setForm(prev => ({...prev, lesson: e.target.value}))} list="lesson-suggestions" />
+                                                <datalist id="lesson-suggestions">{existingLessons.map((l, i) => <option key={l} value={l} />)}</datalist>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500 uppercase ml-1 block">Tópico</label>
+                                                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-blue-500 outline-none font-mono text-sm" placeholder="Ex: Conceitos Básicos" value={form.subcategory} onChange={e => setForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                                <datalist id="subcategory-suggestions">{existingSubcategories.map((sub, i) => <option key={sub} value={sub} />)}</datalist>
+                                            </div>
+                                        </div>
+                                        
                                         <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 flex-shrink-0">
                                             <label className="text-xs font-bold text-purple-400 uppercase ml-1 mb-2 flex items-center gap-1"><Tag size={14}/> Indexação / Tags (Enter)</label>
-                                            <div className="flex flex-wrap gap-2 mb-2">{form.tags.map(t => (<span key={t} className="bg-purple-900/60 text-purple-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-purple-500/40">#{t} <button type="button" onClick={() => removeTag(t)} className="hover:text-red-400 transition-colors"><X size={14}/></button></span>))}</div>
-                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Digite uma tag e pressione Enter" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag} list="tag-suggestions" /><datalist id="tag-suggestions">{existingAdminTags.map((t, i) => <option key={t} value={t} />)}</datalist>
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                                {form.tags.map(t => (
+                                                    <span key={t} className="bg-purple-900/60 text-purple-300 px-3 py-1 rounded-md text-sm flex items-center gap-2 border border-purple-500/40">
+                                                        #{t} <button type="button" onClick={() => removeTag(t)} className="hover:text-red-400 transition-colors"><X size={14}/></button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <input type="text" className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-700 focus:border-purple-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Digite uma tag e pressione Enter" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag} list="tag-suggestions" />
+                                            <datalist id="tag-suggestions">{existingAdminTags.map((t, i) => <option key={t} value={t} />)}</datalist>
                                         </div>
+
                                         <div className="flex-1 min-h-[300px] flex flex-col gap-4">
                                             <div className="flex-1 flex flex-col"><label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1 block">Input: Pergunta</label><RichTextEditor value={form.front} onChange={(val) => setForm(prev => ({...prev, front: val}))} /></div>
                                             <div className="flex-1 flex flex-col"><label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1 block">Output: Resposta</label><RichTextEditor value={form.back} onChange={(val) => setForm(prev => ({...prev, back: val}))} /></div>
                                         </div>
+                                        
                                         <div className="flex gap-3 pt-4 border-t border-slate-700 flex-shrink-0 mt-auto">
                                             {editingId && (<button type="button" onClick={() => { setEditingId(null); setForm(prev => ({ ...prev, front: '', back: '', category: 'Geral', lesson: 'Conteúdo Geral', subcategory: '', tags: [] })); }} className="w-1/3 bg-slate-700 hover:bg-slate-600 text-white font-bold p-3 rounded-lg transition-colors flex items-center justify-center gap-2"><RotateCcw size={16}/> Cancelar</button>)}
                                             <button type="submit" className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold p-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all flex justify-center gap-2 items-center">{editingId ? <><Save size={18} /> Atualizar Card Único</> : <><Plus size={18} /> Inserir Novo Card</>}</button>
@@ -1328,26 +1581,37 @@
             React.useEffect(() => {
                 const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
                     setUser(currentUser);
-                    if (currentUser) setIsAdmin(currentUser.email?.endsWith("@userpro.com") || false);
-                    else { setIsAdmin(false); setReviews({}); setUserStats(null); setCards([]); }
+                    if (currentUser) {
+                        setIsAdmin(currentUser.email?.endsWith("@userpro.com") || false);
+                    } else {
+                        setIsAdmin(false);
+                        setReviews({});
+                        setUserStats(null);
+                        setCards([]); // Clear cards on logout
+                    }
                     setView(currentUser ? "decks" : "auth");
                 });
+
                 return () => unsubAuth();
             }, []);
 
             React.useEffect(() => {
-                if (!user) return; 
+                if (!user) return; // Guard against unauthenticated queries
 
                 const qCards = query(collection(db, "cards"));
                 const unsubCards = onSnapshot(qCards, (snapshot) => {
-                    setCards(snapshot.docs.map(doc => {
+                    const loadedCards = snapshot.docs.map(doc => {
                         const data = doc.data();
                         return { 
-                            id: doc.id, ...data,
-                            category: normalize(data.category || 'Sem Categoria'), lesson: normalize(data.lesson || 'Conteúdo Geral'),
-                            subcategory: normalize(data.subcategory || 'Geral'), tags: Array.isArray(data.tags) ? data.tags : [] 
+                            id: doc.id, 
+                            ...data,
+                            category: normalize(data.category || 'Sem Categoria'),
+                            lesson: normalize(data.lesson || 'Conteúdo Geral'),
+                            subcategory: normalize(data.subcategory || 'Geral'),
+                            tags: Array.isArray(data.tags) ? data.tags : [] 
                         };
-                    }));
+                    });
+                    setCards(loadedCards);
                 }, (error) => console.error("Erro cards onSnapshot:", error));
 
                 const qReviews = query(collection(db, `users/${user.uid}/reviews`));
@@ -1355,28 +1619,42 @@
                     const userReviews = {};
                     snapshot.forEach(doc => { userReviews[doc.id] = doc.data(); });
                     setReviews(userReviews);
-                }, (error) => console.error("Erro reviews:", error));
+                }, (error) => console.error("Erro reviews onSnapshot:", error));
                 
                 const statsRef = doc(db, 'leaderboard', user.uid);
                 const unsubStats = onSnapshot(statsRef, async (docSnap) => {
                     if (!docSnap.exists()) {
                         const defaultStats = { 
-                            email: user.email || 'Anônimo', cardsSeen: 0, correctAnswers: 0, retention: 0, timeStudied: 0, 
-                            currentStreak: 0, dailyActivity: {}, dailyTime: {}, algorithm: 'sm2', fsrsRetention: 0.90
+                            email: user.email || 'Anônimo', 
+                            cardsSeen: 0, 
+                            correctAnswers: 0, 
+                            retention: 0, 
+                            timeStudied: 0, 
+                            currentStreak: 0,
+                            dailyActivity: {},
+                            dailyTime: {},
+                            algorithm: 'fsrs', // Default to modern engine
+                            fsrsRetention: 0.90,
+                            learningProfile: 'standard'
                         };
                         await setDoc(statsRef, { ...defaultStats, lastActive: serverTimestamp() });
                     } else {
                         setUserStats(docSnap.data());
                     }
-                }, (error) => console.error("Erro stats:", error));
+                }, (error) => console.error("Erro stats onSnapshot:", error));
 
-                return () => { unsubCards(); unsubReviews(); unsubStats(); };
+                return () => {
+                    unsubCards();
+                    unsubReviews();
+                    unsubStats();
+                };
             }, [user]);
 
             const getDecksStructure = () => {
                 const structure = {};
                 const now = new Date();
-                const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
+                const endOfToday = new Date();
+                endOfToday.setHours(23, 59, 59, 999);
 
                 cards.forEach(card => {
                     const cat = normalize(card.category || "Sem Categoria");
@@ -1390,7 +1668,9 @@
                     let isNew = false, isLearn = false, isReview = false;
                     const rev = reviews[card.id];
 
-                    if (!rev) { isNew = true; } else {
+                    if (!rev) {
+                        isNew = true; 
+                    } else {
                         let dueDate = rev.dueDate;
                         if (dueDate && typeof dueDate.toDate === 'function') dueDate = dueDate.toDate();
                         else dueDate = new Date(dueDate || now);
@@ -1399,13 +1679,23 @@
                             const rState = String(rev.state || '').toLowerCase().trim();
                             if (rState === 'learning' || rState === 'relearning') isLearn = true;
                             else if (rState === 'review') isReview = true;
-                            else isNew = true;
+                            else if (rState === 'new' || !rState) isNew = true;
                         }
                     }
 
-                    if (isNew) { structure[cat].stats.n++; structure[cat].lessons[lesson].stats.n++; structure[cat].lessons[lesson].subcategories[sub].stats.n++; } 
-                    else if (isLearn) { structure[cat].stats.l++; structure[cat].lessons[lesson].stats.l++; structure[cat].lessons[lesson].subcategories[sub].stats.l++; } 
-                    else if (isReview) { structure[cat].stats.r++; structure[cat].lessons[lesson].stats.r++; structure[cat].lessons[lesson].subcategories[sub].stats.r++; }
+                    if (isNew) {
+                        structure[cat].stats.n++;
+                        structure[cat].lessons[lesson].stats.n++;
+                        structure[cat].lessons[lesson].subcategories[sub].stats.n++;
+                    } else if (isLearn) {
+                        structure[cat].stats.l++;
+                        structure[cat].lessons[lesson].stats.l++;
+                        structure[cat].lessons[lesson].subcategories[sub].stats.l++;
+                    } else if (isReview) {
+                        structure[cat].stats.r++;
+                        structure[cat].lessons[lesson].stats.r++;
+                        structure[cat].lessons[lesson].subcategories[sub].stats.r++;
+                    }
 
                     structure[cat].lessons[lesson].subcategories[sub].cards.push(card);
                 });
@@ -1416,27 +1706,44 @@
                 let queue = cards;
                 const now = new Date();
                 
-                if (settings.category && settings.category !== 'All') queue = queue.filter(c => normalize(c.category) === normalize(settings.category));
-                if (settings.lesson && settings.lesson !== 'All') queue = queue.filter(c => normalize(c.lesson || 'Conteúdo Geral') === normalize(settings.lesson));
-                if (settings.subcategory && settings.subcategory !== 'All') queue = queue.filter(c => normalize(c.subcategory || 'Geral') === normalize(settings.subcategory));
-                if (settings.tag && settings.tag !== 'All') queue = queue.filter(c => (c.tags || []).includes(settings.tag));
+                if (settings.category && settings.category !== 'All') {
+                    queue = queue.filter(c => normalize(c.category) === normalize(settings.category));
+                }
 
-                if (settings.mode === 'new') queue = queue.filter(c => !reviews[c.id]);
-                else if (settings.mode === 'due') {
+                if (settings.lesson && settings.lesson !== 'All') {
+                    queue = queue.filter(c => normalize(c.lesson || 'Conteúdo Geral') === normalize(settings.lesson));
+                }
+
+                if (settings.subcategory && settings.subcategory !== 'All') {
+                    queue = queue.filter(c => normalize(c.subcategory || 'Geral') === normalize(settings.subcategory));
+                }
+                
+                if (settings.tag && settings.tag !== 'All') {
+                    queue = queue.filter(c => (c.tags || []).includes(settings.tag));
+                }
+
+                if (settings.mode === 'new') {
+                    queue = queue.filter(c => !reviews[c.id]);
+                } else if (settings.mode === 'due') {
                     queue = queue.filter(c => {
-                        const r = reviews[c.id]; if (!r) return true;
+                        const r = reviews[c.id];
+                        if (!r) return true;
                         let dueDate;
                         if (r.dueDate && typeof r.dueDate.toDate === 'function') dueDate = r.dueDate.toDate();
                         else dueDate = new Date(r.dueDate || now);
                         return dueDate <= now;
                     });
-                } else if (settings.mode === 'cram') queue = queue.sort(() => Math.random() - 0.5);
-                
+                } else if (settings.mode === 'cram') {
+                    queue = queue.sort(() => Math.random() - 0.5);
+                }
                 if (settings.mode !== 'cram') queue = queue.sort(() => Math.random() - 0.5);
+                
                 queue = queue.slice(0, settings.limit);
                 if (queue.length === 0) { alert("Nenhum card encontrado com esses filtros."); return; }
                 
-                setStudyQueue(queue); setCustomStudyOpen(false); setView("study");
+                setStudyQueue(queue);
+                setCustomStudyOpen(false);
+                setView("study");
             };
 
             const startStudy = (category, lesson = null, subcategory = null) => {
@@ -1450,17 +1757,29 @@
 
                 if (user) {
                     queue = queue.filter(card => {
-                        const review = reviews[card.id]; if (!review) return true; 
+                        const review = reviews[card.id];
+                        if (!review) return true; 
+                        
                         let dueDate;
                         if (review.dueDate && typeof review.dueDate.toDate === 'function') dueDate = review.dueDate.toDate();
                         else dueDate = new Date(review.dueDate || now);
+                        
                         return dueDate <= now; 
                     });
-                } else queue = queue.sort(() => Math.random() - 0.5);
+                } else {
+                    queue = queue.sort(() => Math.random() - 0.5);
+                }
                 
                 if (queue.length === 0) {
-                    if (confirm("Você já concluiu todos os cards vencidos até este momento exato.\nDeseja forçar uma revisão extra de fixação agora (Modo Cram)?")) {
-                        startCustomStudy({ category: category || 'All', lesson: lesson || 'All', subcategory: subcategory || 'All', mode: 'cram', limit: 100, tag: 'All' });
+                    if (confirm("Você já concluiu todos os cards vencidos até este momento exato.\n\nOs cards em aprendizado que retornam daqui a pouco estarão aguardando o tempo acabar. \n\nDeseja forçar uma revisão extra de fixação agora (Modo Cram)?")) {
+                        startCustomStudy({ 
+                            category: category || 'All', 
+                            lesson: lesson || 'All', 
+                            subcategory: subcategory || 'All', 
+                            mode: 'cram', 
+                            limit: 100, 
+                            tag: 'All' 
+                        });
                     }
                     return;
                 }
@@ -1473,18 +1792,31 @@
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-blue-500">
                         <div className="relative">
                             <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                            <Cpu size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
+                            <BrainCircuit size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
                         </div>
-                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INICIALIZANDO L1 CACHE (FSRS/SM2)...</span>
+                        <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INICIALIZANDO..</span>
                     </div>
                 );
             }
 
-            if (view === "auth") return <AuthScreen onLogin={() => setView("decks")} guestMode={() => signInAnonymously(auth).then(() => setView("decks")).catch(err => alert("Erro: " + err.message))} />;
+            if (view === "auth") {
+                return <AuthScreen 
+                    onLogin={() => setView("decks")} 
+                    guestMode={() => {
+                        signInAnonymously(auth).then(() => setView("decks")).catch(err => alert("Erro no login anônimo: " + err.message));
+                    }} 
+                />;
+            }
 
             const structure = getDecksStructure();
+            
             let totalDue = 0;
-            if(user) Object.values(structure).forEach(cat => totalDue += (cat.stats.n + cat.stats.l + cat.stats.r));
+            if(user) {
+                Object.values(structure).forEach(cat => {
+                   totalDue += (cat.stats.n + cat.stats.l + cat.stats.r);
+                });
+            }
+
             const allTags = [...new Set(cards.flatMap(c => c.tags || []))].sort();
 
             return (
@@ -1492,11 +1824,13 @@
                     <nav className="border-b border-slate-800 bg-slate-950/80 sticky top-0 z-50 backdrop-blur-md">
                         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-3 font-bold text-xl cursor-pointer group" onClick={() => setView("decks")}>
-                                <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform"><Cpu size={20} className="text-white" /></div>
-                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-blue-400 align-top border border-blue-500/30">v1.5</span></span>
+                                <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
+                                    <BrainCircuit size={20} className="text-white" />
+                                </div>
+                                <span className="text-white tracking-tight">L1 <span className="text-blue-500">Cache</span> <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-blue-400 align-top border border-blue-500/30">v2.0</span></span>
                             </div>
                             <div className="flex items-center gap-4">
-                                {user && <button onClick={() => setView("leaderboard")} className="hidden md:flex text-yellow-500 items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking</button>}
+                                {user && <button onClick={() => setView("leaderboard")} className="hidden md:flex text-yellow-500 items-center gap-1.5 text-sm hover:text-yellow-400 font-medium bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/20 transition-all hover:bg-yellow-500/20"><Trophy size={14} /> Ranking Diário</button>}
                                 {isAdmin && <button onClick={() => setView("admin")} className="text-amber-500 hover:text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20 transition-all flex items-center gap-1.5 text-sm"><Lock size={14} /> Admin</button>}
                                 {user && <button onClick={() => setSettingsOpen(true)} className="text-slate-400 hover:text-white transition-colors p-2 rounded-full hover:bg-slate-800" title="Configurações (Engine)"><Settings size={20}/></button>}
                                 {user ? <button onClick={() => signOut(auth)} className="text-slate-400 hover:text-red-400 transition-colors p-2" title="Sair"><LogOut size={20}/></button> : null}
@@ -1509,12 +1843,8 @@
                             <div className="animate-fade-in space-y-6 flex flex-col min-h-[70vh]">
                                 <header className="border-b border-slate-800 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                     <div>
-                                        <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">Painel de Controle 
-                                            {userStats?.algorithm === 'fsrs' ? 
-                                            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full uppercase tracking-widest border border-emerald-500/30 flex items-center gap-1"><BrainCircuit size={12}/> FSRS (A.I.) Ativo</span>
-                                            : <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full uppercase tracking-widest border border-blue-500/30">SM-2 Ativo</span>}
-                                        </h2>
-                                        <div className="flex flex-wrap gap-4 md:gap-6 text-sm text-slate-400 font-mono mt-3">
+                                        <h2 className="text-3xl font-bold text-white mb-2">Painel de Controle</h2>
+                                        <div className="flex gap-6 text-sm text-slate-400 font-mono">
                                             <div className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div> {cards.length} Cards (Live)</div>
                                             <div className="flex items-center gap-2"><div className="w-2 h-2 bg-emerald-500 rounded-full"></div> {Object.keys(reviews).length} Memorizados</div>
                                             {user && totalDue === 0 && <div className="flex items-center gap-2 text-emerald-400"><Check size={14}/> Tudo em dia!</div>}
@@ -1526,8 +1856,20 @@
                                 <DeckTable structure={structure} startStudy={startStudy} />
                                 <DailyStatsSummary userStats={userStats} />
                                 
-                                <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} userStats={userStats} setUserStats={setUserStats} user={user} />
-                                <CustomStudyModal isOpen={customStudyOpen} onClose={() => setCustomStudyOpen(false)} onStart={startCustomStudy} categories={[...new Set(cards.map(c => normalize(c.category)))]} tags={allTags} />
+                                <SettingsModal 
+                                    isOpen={settingsOpen} 
+                                    onClose={() => setSettingsOpen(false)} 
+                                    userStats={userStats} 
+                                    setUserStats={setUserStats} 
+                                    user={user} 
+                                />
+                                <CustomStudyModal 
+                                    isOpen={customStudyOpen} 
+                                    onClose={() => setCustomStudyOpen(false)} 
+                                    onStart={startCustomStudy} 
+                                    categories={[...new Set(cards.map(c => normalize(c.category)))]} 
+                                    tags={allTags} 
+                                />
                             </div>
                         )}
                         {view === "study" && <StudySession initialQueue={studyQueue} user={user} reviews={reviews} setReviews={setReviews} userStats={userStats} setUserStats={setUserStats} onFinish={() => setView("decks")} />}
