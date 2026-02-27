@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nosso Site</title>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/128/4696/4696916.png">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -974,8 +975,8 @@
                 } catch (err) { alert("Erro: " + err.message); } finally { setLoading(false); }
             };
             
-            // Fallback para o título
-            const displayTitle = siteSettings?.title || "Nosso Site v2.0";
+            // Ajuste no fallback do título para respeitar o solicitado (Nosso Site)
+            const displayTitle = siteSettings?.title || "Nosso Site";
 
             return (
                 <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950 relative overflow-hidden">
@@ -984,7 +985,7 @@
                     <div className="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10 animate-slide-up">
                         <div className="text-center mb-8">
                             <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white shadow-lg shadow-blue-500/30">
-                                {siteSettings?.favicon ? <img src={siteSettings.favicon} alt="Logo" className="w-10 h-10 object-contain" /> : <BrainCircuit size={32} />}
+                                <img src={siteSettings?.favicon || "https://cdn-icons-png.flaticon.com/128/4696/4696916.png"} alt="Logo" className="w-10 h-10 object-contain" />
                             </div>
                             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">{displayTitle}</h1>
                             <p className="text-slate-400 text-sm">Algoritmos SM-2 & FSRS (I.A) nativos para retenção de ciências da computação.</p>
@@ -1472,7 +1473,7 @@
                                             <input 
                                                 type="text" 
                                                 className="w-full bg-slate-950 p-4 rounded-xl text-white border border-slate-700 focus:border-emerald-500 outline-none font-medium transition-colors" 
-                                                placeholder="Ex: Nosso Site - Engenharia de Software" 
+                                                placeholder="Ex: Nosso Site" 
                                                 value={settingsForm.title} 
                                                 onChange={e => setSettingsForm(prev => ({...prev, title: e.target.value}))} 
                                             />
@@ -1484,7 +1485,7 @@
                                             <input 
                                                 type="url" 
                                                 className="w-full bg-slate-950 p-4 rounded-xl text-white border border-slate-700 focus:border-emerald-500 outline-none font-mono text-sm transition-colors" 
-                                                placeholder="https://exemplo.com/logo.png" 
+                                                placeholder="https://cdn-icons-png.flaticon.com/128/4696/4696916.png" 
                                                 value={settingsForm.favicon} 
                                                 onChange={e => setSettingsForm(prev => ({...prev, favicon: e.target.value}))} 
                                             />
@@ -1495,12 +1496,8 @@
                                         <div className="mt-8 p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center gap-4">
                                             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest min-w-max">Preview Atual:</span>
                                             <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 truncate max-w-full">
-                                                {settingsForm.favicon ? (
-                                                    <img src={settingsForm.favicon} alt="Preview" className="w-5 h-5 object-contain" onError={(e) => {e.target.style.display='none'}} onLoad={(e) => {e.target.style.display='block'}} />
-                                                ) : (
-                                                    <BrainCircuit size={20} className="text-slate-500" />
-                                                )}
-                                                <span className="text-slate-300 text-sm truncate">{settingsForm.title || "Nosso Site v2.0"}</span>
+                                                <img src={settingsForm.favicon || "https://cdn-icons-png.flaticon.com/128/4696/4696916.png"} alt="Preview" className="w-5 h-5 object-contain" onError={(e) => {e.target.style.display='none'}} onLoad={(e) => {e.target.style.display='block'}} />
+                                                <span className="text-slate-300 text-sm truncate">{settingsForm.title || "Nosso Site"}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2047,9 +2044,9 @@
                         
                         // Aplica o título em tempo real
                         if (data.title) {
-                            document.title = data.title;
+                            document.title = data.title + " - v2.0";
                         } else {
-                            document.title = "Nosso Site (FSRS Engine v2.0)";
+                            document.title = "Nosso Site - v2.0";
                         }
 
                         // Aplica o Favicon em tempo real injetando a tag no <head>
@@ -2062,6 +2059,8 @@
                             }
                             link.href = data.favicon;
                         }
+                    } else {
+                         document.title = "Nosso Site - v2.0";
                     }
                 }, (error) => console.error("Erro site_config onSnapshot:", error));
 
@@ -2251,7 +2250,7 @@
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-blue-500">
                         <div className="relative">
                             <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                            <BrainCircuit size={24} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
+                            <img src="https://cdn-icons-png.flaticon.com/128/4696/4696916.png" className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" alt="Loading" />
                         </div>
                         <span className="font-mono text-sm tracking-[0.2em] mt-6 text-blue-400">INICIALIZANDO..</span>
                     </div>
@@ -2268,15 +2267,15 @@
             const allTags = [...new Set(cards.flatMap(c => c.tags || []))].sort();
             
             // Variável pro UI limpo e coerente na navbar
-            const displayTitle = siteSettings.title || "Nosso Site v2.0";
+            const displayTitle = siteSettings.title || "Nosso Site";
 
             return (
                 <div className="min-h-screen flex flex-col bg-slate-950 text-slate-200 font-sans selection:bg-purple-500/30">
                     <nav className="border-b border-slate-800 bg-slate-950/80 sticky top-0 z-50 backdrop-blur-md">
                         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-3 font-bold text-xl cursor-pointer group" onClick={() => setView("decks")}>
-                                <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
-                                    {siteSettings.favicon ? <img src={siteSettings.favicon} alt="Logo" className="w-5 h-5 object-contain" /> : <BrainCircuit size={20} className="text-white" />}
+                                <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform flex items-center justify-center">
+                                    <img src={siteSettings.favicon || "https://cdn-icons-png.flaticon.com/128/4696/4696916.png"} alt="Logo" className="w-5 h-5 object-contain" />
                                 </div>
                                 <span className="text-white tracking-tight hidden sm:block max-w-[200px] truncate">{displayTitle}</span>
                                 <span className="text-[10px] bg-slate-800 px-1 py-0.5 rounded text-blue-400 align-top border border-blue-500/30">v2.0</span>
