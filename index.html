@@ -165,7 +165,8 @@
 
                     brownNoiseGain.gain.setValueAtTime(0, now);
                     // Fade-in Neuroacústico (Suave, 2 segundos para evitar pico de ansiedade)
-                    brownNoiseGain.gain.linearRampToValueAtTime(0.4, now + 2.0); 
+                    // Volume base ajustado para ~30% (0.12) para manter o estado de flow sem abafar o raciocínio
+                    brownNoiseGain.gain.linearRampToValueAtTime(0.12, now + 2.0); 
 
                     brownNoiseNode.connect(brownNoiseGain);
                     brownNoiseGain.connect(audioCtx.destination);
