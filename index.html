@@ -1738,7 +1738,7 @@
                 const back = String(raw.back || raw.answer || '').trim();
                 const orderRaw = raw.order ?? raw.position ?? idx;
                 const order = Number.isFinite(Number(orderRaw)) ? Number(orderRaw) : idx;
-                const prerequisiteTopic = normalize(raw.prerequisiteTopic || raw.requiredTopic || raw.prerequisite || '');
+                const prerequisiteTopic = normalize(raw.prerequisiteTopic || raw.prerequisitoTopico || raw.topicoPrerequisito || raw.requiredTopic || raw.prerequisite || raw.prerequisito || '');
                 const tags = Array.isArray(raw.tags)
                     ? raw.tags.map(t => String(t).trim().toLowerCase()).filter(Boolean)
                     : [];
@@ -1773,6 +1773,7 @@
                         lesson: normalize(c.lesson || 'Conteúdo Geral'),
                         subcategory: normalize(c.subcategory || 'Geral'),
                         prerequisiteTopic: normalize(c.prerequisiteTopic || ''),
+                        prerequisitoTopico: normalize(c.prerequisiteTopic || ''),
                         front: c.front || '',
                         back: c.back || '',
                         order: Number.isFinite(Number(c.order)) ? Number(c.order) : 0,
@@ -1999,7 +2000,7 @@
                                                     disabled={isImportingCards}
                                                 />
                                             </label>
-                                            <p className="text-xs text-slate-500">Campos aceitos: category (ou subject), lesson (ou unit), subcategory (ou topic), prerequisiteTopic, front, back, order, tags.</p>
+                                            <p className="text-xs text-slate-500">Campos aceitos: category (ou subject), lesson (ou unit), subcategory (ou topic), prerequisiteTopic (ou prerequisitoTopico / topicoPrerequisito), front, back, order, tags.</p>
                                         </div>
                                     </div>
 
