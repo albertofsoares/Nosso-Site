@@ -3,17 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <title>Nosso Site 3.0</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Firebase Compat -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="root"></div>
 
-  <script defer src="firebase.js"></script>
-  <script defer src="app.js"></script>
+  <script src="firebase.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
