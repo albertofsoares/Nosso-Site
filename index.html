@@ -1078,40 +1078,34 @@
                     </div>
 
                     {/* CABEÇALHO REESTRUTURADO CIRURGICAMENTE E ALINHADO */}
-                    <div className="flex items-center justify-between text-xs text-slate-500 uppercase tracking-widest mb-4 px-2 w-full flex-nowrap overflow-x-auto custom-scrollbar pb-2 gap-4">
+                    <div className="flex items-center justify-between text-xs text-slate-500 uppercase tracking-widest mb-4 px-2 w-full gap-2 overflow-hidden">
                         
                         {/* Bloco Esquerdo: Desfazer + Matéria */}
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 min-w-0 shrink">
                             <button onClick={handleUndo} disabled={index === 0} title="Desfazer (Ctrl+Z)" className={`flex items-center gap-1 transition-colors shrink-0 h-7 ${index === 0 ? 'text-slate-700 cursor-not-allowed' : 'text-slate-400 hover:text-white'}`}>
                                 <Undo2 size={16} /> <span className="hidden sm:inline">Desfazer</span>
                             </button>
 
                             <div className="h-4 w-px bg-slate-700 hidden sm:block shrink-0 mx-1"></div>
 
-                            <span className="bg-slate-900 px-2 py-1 rounded text-blue-400 border border-slate-800 flex items-center h-7 whitespace-nowrap text-[10px] font-bold" title={card.category}>{card.category}</span>
+                            <span className="bg-slate-900 px-2 py-1 rounded text-blue-400 border border-slate-800 flex items-center h-7 text-[10px] font-bold truncate shrink max-w-[120px] md:max-w-[200px]" title={card.category}>{card.category}</span>
                         </div>
 
-                        {/* Bloco Direito: Aula/Tópico + Tags + Status + Streak + Restantes */}
-                        <div className="flex items-center gap-2 shrink-0 ml-auto">
+                        {/* Bloco Direito: Aula + Tags + Status + Streak + Restantes */}
+                        <div className="flex items-center gap-1.5 md:gap-2 shrink-0 ml-auto">
                             
-                            {/* AULA E TÓPICO COMPLETOS NO LUGAR DO TIMER */}
-                            <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded border border-slate-700 h-7 whitespace-nowrap text-slate-300 font-bold text-[10px] uppercase">
-                                <BookOpen size={12} className="text-slate-500" />
-                                <span>{card.lesson || 'Geral'}</span>
-                                {card.subcategory && card.subcategory !== 'Geral' && (
-                                    <>
-                                        <span className="text-slate-600">/</span>
-                                        <span className="text-slate-400">{card.subcategory}</span>
-                                    </>
-                                )}
+                            {/* AULA (Apenas Aula, sem Tópico para evitar overflow horizontal) */}
+                            <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded border border-slate-700 h-7 text-slate-300 font-bold text-[10px] uppercase shrink min-w-0" title={card.lesson || 'Geral'}>
+                                <BookOpen size={12} className="text-slate-500 shrink-0" />
+                                <span className="truncate max-w-[80px] md:max-w-[150px]">{card.lesson || 'Geral'}</span>
                             </div>
 
-                            {/* TAGS DA AULA AGORA VISÍVEIS DE FORMA EXPLÍCITA */}
+                            {/* TAGS DA AULA AGORA VISÍVEIS (Com limite de truncamento) */}
                             {card.tags && card.tags.length > 0 && (
-                                <div className="flex items-center gap-1 shrink-0 h-7">
-                                    {card.tags.map(t => (
-                                        <span key={t} className="bg-purple-900/30 text-purple-400 px-2 py-1 rounded text-[10px] border border-purple-500/30 flex items-center gap-1 whitespace-nowrap h-7 uppercase font-bold">
-                                            <Tag size={10}/> {t}
+                                <div className="hidden sm:flex items-center gap-1 shrink-0 h-7">
+                                    {card.tags.slice(0, 1).map(t => (
+                                        <span key={t} className="bg-purple-900/30 text-purple-400 px-2 py-1 rounded text-[10px] border border-purple-500/30 flex items-center gap-1 whitespace-nowrap h-7 uppercase font-bold max-w-[80px]" title={t}>
+                                            <Tag size={10} className="shrink-0"/> <span className="truncate">{t}</span>
                                         </span>
                                     ))}
                                 </div>
