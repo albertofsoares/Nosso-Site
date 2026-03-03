@@ -783,6 +783,30 @@
                 emojiBurstTimeoutRef.current = setTimeout(() => setEmojiBurst([]), 1300);
             };
 
+            const getStreakMilestone = (streak) => {
+                if (!streak || streak < 5) return null;
+                if (streak >= 20 && streak % 5 === 0) return { text: '🔥 Perfeito! 🔥', tone: 'perfect' };
+                if (streak === 15 || streak === 10) return { text: 'Imbatível 🔥', tone: 'elite' };
+                if (streak === 5) return { text: 'Incrível! 🔥', tone: 'amazing' };
+                return null;
+            };
+
+            const triggerEmojiBurst = () => {
+                const emojiChoices = ['🎉', '✨', '🥳', '🎊', '🔥'];
+                const bursts = Array.from({ length: 12 }, (_, idx) => ({
+                    id: `${Date.now()}-${idx}`,
+                    emoji: emojiChoices[Math.floor(Math.random() * emojiChoices.length)],
+                    x: 12 + Math.random() * 76,
+                    y: 18 + Math.random() * 64,
+                    travelX: -90 + Math.random() * 180,
+                    travelY: -120 + Math.random() * 140
+                }));
+
+                setEmojiBurst(bursts);
+                if (emojiBurstTimeoutRef.current) clearTimeout(emojiBurstTimeoutRef.current);
+                emojiBurstTimeoutRef.current = setTimeout(() => setEmojiBurst([]), 1300);
+            };
+
             const progress = queue.length > 0 ? ((index) / queue.length) * 100 : 100;
 
             const currentAlgorithm = userStats?.algorithm || 'sm2';
