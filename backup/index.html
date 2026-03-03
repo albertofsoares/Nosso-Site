@@ -88,6 +88,28 @@
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #3b82f6; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        .live-review-highlight {
+            font-weight: 700;
+            background: linear-gradient(90deg, #22d3ee 0%, #a78bfa 35%, #f472b6 50%, #a78bfa 65%, #22d3ee 100%);
+            background-size: 220% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: liveReviewScan 2.8s ease-in-out infinite, liveReviewPulse 2.8s ease-in-out infinite;
+            text-shadow: 0 0 14px rgba(167, 139, 250, 0.35);
+        }
+
+        @keyframes liveReviewScan {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes liveReviewPulse {
+            0%, 100% { filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.35)) drop-shadow(0 0 7px rgba(244, 114, 182, 0.2)); }
+            50% { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.7)) drop-shadow(0 0 14px rgba(244, 114, 182, 0.5)); }
+        }
     </style>
 </head>
 
@@ -99,8 +121,8 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, ArrowLeftRight, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare, ListTodo, CheckCircle, Circle, HelpCircle, Award, Hash, Globe, AppWindow, Image as ImageIcon, Info, Headphones, Mic } from "https://esm.sh/lucide-react@0.344.0?bundle";
+        import { getFirestore, collection, addDoc, doc, setDoc, deleteDoc, updateDoc, serverTimestamp, query, onSnapshot, writeBatch, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { Cpu, Zap, LogOut, Plus, Trash2, Pencil, Check, X, Folder, Lock, Trophy, Bold, Italic, Code, List, ArrowLeft, ArrowLeftRight, Eye, Filter, Save, RotateCcw, Volume2, Keyboard, Activity, Calendar, Settings, PlayCircle, Undo2, Search, ChevronDown, ChevronRight, BookOpen, Layers, Repeat, GraduationCap, AlertCircle, Flame, Target, TrendingUp, Clock, Tag, Network, ListChecks, CheckSquare, BrainCircuit, Sliders, Timer, TerminalSquare, ListTodo, CheckCircle, Circle, HelpCircle, Award, Hash, Globe, AppWindow, Image as ImageIcon, Info, Headphones, Mic, StickyNote, Send } from "https://esm.sh/lucide-react@0.344.0?bundle";
 
         const firebaseConfig = {
             apiKey: "AIzaSyClIIJkYOmAvEKPtXvG-SIi9SzxQpaBN9s",
@@ -116,6 +138,26 @@
         const db = getFirestore(app);
 
         const normalize = (val) => String(val || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+        const escapeHtml = (value) => String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        const sanitizeCardText = (value) => String(value || '')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\\n/g, '\n')
+            .trim();
+        const formatCardContent = (value) => {
+            const cleaned = sanitizeCardText(value);
+            if (!cleaned) return '';
+
+            const hasHtmlTags = /<\/?[a-z][\s\S]*?>/i.test(cleaned);
+            if (hasHtmlTags) return cleaned;
+
+            return escapeHtml(cleaned).replace(/\n/g, '<br />');
+        };
         const isCardUnlocked = (card, allCards, reviews) => {
             const prerequisiteTopic = normalize(card?.prerequisiteTopic || '');
             if (!prerequisiteTopic) return true;
@@ -136,6 +178,24 @@
             const day = String(dateObj.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
+
+        const buildDefaultUserStats = (email = 'Anônimo') => ({
+            email,
+            cardsSeen: 0,
+            correctAnswers: 0,
+            retention: 0,
+            timeStudied: 0,
+            currentStreak: 0,
+            maxStreak: 0,
+            maxRetention: 0,
+            quizStats: { totalExamTime: 0, questionsSeen: 0, correctAnswers: 0, examsTaken: 0 },
+            dailyActivity: {},
+            dailyTime: {},
+            dailyCorrect: {},
+            algorithm: 'fsrs',
+            fsrsRetention: 0.90,
+            learningProfile: 'standard'
+        });
 
         // Engine de Áudio (Aprimorada com Gerador Browniano)
         const AudioEngine = (function() {
@@ -653,21 +713,20 @@
 
             // Voice-to-Text States
             const [isRecording, setIsRecording] = React.useState(false);
+            const [timeLeft, setTimeLeft] = React.useState(25 * 60);
+            const [isTimerAlert, setIsTimerAlert] = React.useState(false);
+            const [feedbackPulse, setFeedbackPulse] = React.useState({ active: false, color: 'transparent' });
+            
             const recognitionRef = React.useRef(null);
             const baseTextRef = React.useRef("");
+            const INITIAL_FOCUS_TIME = 25 * 60;
 
-            const INITIAL_FOCUS_TIME = 25 * 60; // 25 Minutos
-            const [timeLeft, setTimeLeft] = React.useState(INITIAL_FOCUS_TIME);
-            const [isTimerAlert, setIsTimerAlert] = React.useState(false);
-
-            const [feedbackPulse, setFeedbackPulse] = React.useState({ active: false, color: 'transparent' });
             const progress = queue.length > 0 ? ((index) / queue.length) * 100 : 100;
 
             const currentAlgorithm = userStats?.algorithm || 'sm2';
             const currentRetention = userStats?.fsrsRetention || 0.90;
             const currentLearningProfile = userStats?.learningProfile || 'standard';
 
-            // Voice Dictation Logic (Técnica Feynman)
             const toggleDictation = () => {
                 if (isRecording) {
                     recognitionRef.current?.stop();
@@ -686,7 +745,6 @@
                 recognition.interimResults = true;
                 recognition.lang = 'pt-BR';
 
-                // Captura o texto que já foi digitado manualmente
                 baseTextRef.current = scratchpadText;
 
                 recognition.onstart = () => setIsRecording(true);
@@ -696,8 +754,6 @@
                     for (let i = 0; i < event.results.length; i++) {
                         sessionTranscript += event.results[i][0].transcript;
                     }
-
-                    // Adiciona um espaço de forma inteligente se não houver um no final do texto base
                     const space = baseTextRef.current && !baseTextRef.current.endsWith(' ') && !baseTextRef.current.endsWith('\n') ? ' ' : '';
                     setScratchpadText(baseTextRef.current + space + sessionTranscript);
                 };
@@ -718,7 +774,6 @@
                 }
             };
 
-            // Para o reconhecimento de voz ao desmontar ou trocar de card
             React.useEffect(() => {
                 return () => {
                     if (recognitionRef.current) {
@@ -772,7 +827,6 @@
                 setCardStartTime(Date.now());
             };
 
-            // Anti-Conflito de Digitação: Desliga o mic se você voltar a digitar mecanicamente
             const handleScratchpadChange = (e) => {
                 if (isRecording) {
                     recognitionRef.current?.stop();
@@ -839,6 +893,8 @@
                     }
 
                     updatedStats.retention = (updatedStats.correctAnswers / updatedStats.cardsSeen) * 100;
+                    updatedStats.maxStreak = Math.max(updatedStats.maxStreak || 0, updatedStats.currentStreak || 0);
+                    updatedStats.maxRetention = Math.max(updatedStats.maxRetention || 0, updatedStats.retention || 0);
 
                     updatedStats.dailyActivity = updatedStats.dailyActivity || {};
                     updatedStats.dailyActivity[todayStr] = (updatedStats.dailyActivity[todayStr] || 0) + 1;
@@ -971,8 +1027,8 @@
                             <div className="absolute inset-0 backface-hidden glass border border-slate-700 rounded-3xl p-6 md:p-8 flex flex-col overflow-hidden bg-slate-900">
                                 <div className="absolute top-4 right-4 text-slate-600 hover:text-blue-400 cursor-pointer transition-colors z-20" title="Ouvir Pergunta" onClick={(e) => { e.stopPropagation(); speakText(card.front); }}><Volume2 size={24} /></div>
 
-                                <div className="w-full max-h-[50%] overflow-y-auto custom-scrollbar px-2 mb-4 pb-4 border-b border-slate-800">
-                                    <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center flex flex-col items-center justify-center" dangerouslySetInnerHTML={{__html: card.front || ''}}></div>
+                                <div className="w-full max-h-[50%] overflow-y-auto custom-scrollbar px-2 mb-4 pb-4 border-b border-slate-800 flex items-center justify-center">
+                                    <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center" dangerouslySetInnerHTML={{__html: formatCardContent(card.front)}}></div>
                                 </div>
 
                                 <div className="flex-1 flex flex-col">
@@ -1006,7 +1062,7 @@
 
                                 <div className="w-full border-b border-slate-800/80 pb-4 mb-4 text-center shrink-0">
                                     <span className="text-[10px] uppercase text-slate-600 font-bold tracking-widest block mb-1">Contexto (Pergunta)</span>
-                                    <div className="text-sm text-slate-400 opacity-70 line-clamp-2 px-4" dangerouslySetInnerHTML={{__html: card.front}}></div>
+                                    <div className="text-sm text-slate-400 opacity-70 line-clamp-2 px-4" dangerouslySetInnerHTML={{__html: formatCardContent(card.front)}}></div>
                                 </div>
 
                                 <div className="flex-1 w-full overflow-y-auto custom-scrollbar px-2 flex flex-col gap-6">
@@ -1019,7 +1075,7 @@
 
                                     <div className="w-full">
                                         <span className="text-[10px] uppercase text-blue-500/50 font-bold tracking-widest block mb-2 text-center">Resposta Gabarito:</span>
-                                        <div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words flex flex-col items-center justify-center" dangerouslySetInnerHTML={{__html: card.back || ''}}></div>
+                                        <div className="prose prose-invert prose-lg text-slate-200 w-full max-w-none text-center select-text leading-relaxed break-words" dangerouslySetInnerHTML={{__html: formatCardContent(card.back)}}></div>
                                     </div>
                                 </div>
                             </div>
@@ -1062,6 +1118,7 @@
 
         const DeckRow = ({ name, stats, level, isExpanded, onToggle, onStudy, hasChildren, icon }) => {
             const paddingLeft = level === 0 ? 'pl-4 md:pl-6' : level === 1 ? 'pl-10 md:pl-14' : 'pl-16 md:pl-24';
+            const isLiveReview = level === 1 && name?.trim().toLowerCase() === 'live de revisão';
             return (
                <div className={`grid grid-cols-12 gap-2 items-center py-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors group cursor-pointer ${paddingLeft}`} onClick={(e) => { e.stopPropagation(); onStudy(); }}>
                    <div className="col-span-6 md:col-span-6 flex items-center gap-2">
@@ -1071,7 +1128,7 @@
                            </button>
                        ) : <div className="w-6 shrink-0"></div>}
                        {icon && <span className="text-slate-500 shrink-0">{icon}</span>}
-                       <span className={`font-medium truncate ${level === 0 ? 'text-white text-base md:text-lg' : level === 1 ? 'text-slate-200 text-sm md:text-base' : 'text-slate-400 text-sm'}`} title={name}>{name}</span>
+                       <span className={`${isLiveReview ? 'live-review-highlight' : 'font-medium'} truncate ${level === 0 ? 'text-white text-base md:text-lg' : level === 1 ? 'text-slate-200 text-sm md:text-base' : 'text-slate-400 text-sm'}`} title={name}>{name}</span>
                    </div>
                    <div className="col-span-2 md:col-span-2 text-center font-mono text-sm">{formatCount(stats.n, 'text-blue-400')}</div>
                    <div className="col-span-2 md:col-span-2 text-center font-mono text-sm">{formatCount(stats.l, 'text-orange-400')}</div>
@@ -1184,6 +1241,10 @@
         const LeaderboardView = ({ isAdmin }) => {
             const [leaders, setLeaders] = React.useState([]);
             const [loading, setLoading] = React.useState(true);
+            const [activeTab, setActiveTab] = React.useState('daily');
+
+            const getMonthFromDate = (dateObj = new Date()) => `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+            const getDateMonth = (dateStr = '') => dateStr.slice(0, 7);
 
             const calculateLast31Days = (dailyActivity) => {
                 if (!dailyActivity) return 0;
@@ -1193,11 +1254,18 @@
                     const targetDate = new Date(today);
                     targetDate.setDate(targetDate.getDate() - i);
                     const dateStr = getLocalDateString(targetDate);
-                    if (dailyActivity[dateStr]) {
-                        total += dailyActivity[dateStr];
-                    }
+                    if (dailyActivity[dateStr]) total += dailyActivity[dateStr];
                 }
                 return total;
+            };
+
+            const calculateCurrentMonthTotal = (dataMap) => {
+                if (!dataMap) return 0;
+                const currentMonth = getMonthFromDate();
+                return Object.entries(dataMap).reduce((acc, [dateStr, value]) => {
+                    if (getDateMonth(dateStr) === currentMonth) return acc + (value || 0);
+                    return acc;
+                }, 0);
             };
 
             const handleDeleteUser = async (userId, userEmail) => {
@@ -1218,27 +1286,35 @@
 
                     const fetchedLeaders = snap.docs.map(d => {
                         const data = d.data();
-
                         const cardsSeenToday = (data.dailyActivity && data.dailyActivity[todayStr]) || 0;
                         const timeStudiedToday = (data.dailyTime && data.dailyTime[todayStr]) || 0;
                         const correctToday = (data.dailyCorrect && data.dailyCorrect[todayStr]) || 0;
-
                         const dailyRetention = cardsSeenToday > 0 ? (correctToday / cardsSeenToday) * 100 : 0;
+                        const monthlyCards = calculateCurrentMonthTotal(data.dailyActivity || {});
+                        const monthlyTime = calculateCurrentMonthTotal(data.dailyTime || {});
+                        const monthlyCorrect = calculateCurrentMonthTotal(data.dailyCorrect || {});
+                        const monthlyRetention = monthlyCards > 0 ? (monthlyCorrect / monthlyCards) * 100 : 0;
 
                         return {
                             id: d.id,
                             email: data.email,
                             ...data,
-                            cardsSeenToday: cardsSeenToday,
-                            timeStudiedToday: timeStudiedToday,
+                            cardsSeenToday,
+                            timeStudiedToday,
                             retention: cardsSeenToday > 0 ? dailyRetention : (data.retention || 0),
                             currentStreak: data.currentStreak || 0,
+                            maxStreak: data.maxStreak || 0,
+                            maxRetention: data.maxRetention || 0,
                             dailyActivity: data.dailyActivity || {},
-                            dailyTime: data.dailyTime || {}
+                            dailyTime: data.dailyTime || {},
+                            monthlyCards,
+                            monthlyTime,
+                            monthlyRetention,
+                            quizStats: data.quizStats || { totalExamTime: 0, questionsSeen: 0, correctAnswers: 0, examsTaken: 0 }
                         };
                     }).filter(u => u.email && u.email !== 'Anônimo' && u.email.includes('@'));
 
-                    setLeaders(fetchedLeaders.sort((a,b) => (b.cardsSeenToday - a.cardsSeenToday) || (b.retention - a.retention)).slice(0, 50));
+                    setLeaders(fetchedLeaders);
                     setLoading(false);
                 }, (error) => {
                     console.error("Erro Leaderboard onSnapshot:", error);
@@ -1248,215 +1324,249 @@
                 return () => unsub();
             }, []);
 
+            // FUNÇÃO PARA RENDERIZAR A BOLHA DE PROGRESSO
+            const getRetentionBubble = (value) => {
+                const num = Number(value) || 0;
+                let colors = "";
+                
+                if (num < 30) {
+                    colors = "bg-red-500/20 text-red-400 border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.2)]";
+                } else if (num < 60) {
+                    colors = "bg-orange-500/20 text-orange-400 border-orange-500/30 shadow-[0_0_8px_rgba(249,115,22,0.2)]";
+                } else {
+                    colors = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]";
+                }
+
+                return (
+                    <div className="flex justify-center">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] md:text-xs font-bold transition-all ${colors}`}>
+                            {num.toFixed(1)}%
+                        </span>
+                    </div>
+                );
+            };
+
+            const sortedDaily = [...leaders].sort((a,b) => (b.cardsSeenToday - a.cardsSeenToday) || (b.retention - a.retention)).slice(0, 50);
+            const sortedMonthly = [...leaders].sort((a,b) => (b.monthlyCards - a.monthlyCards) || (b.monthlyRetention - a.monthlyRetention)).slice(0, 50);
+            const sortedQuizzes = [...leaders].sort((a,b) => (b.quizStats?.correctAnswers || 0) - (a.quizStats?.correctAnswers || 0) || (b.quizStats?.questionsSeen || 0) - (a.quizStats?.questionsSeen || 0)).slice(0, 50);
+
             return (
-                <div className="max-w-5xl mx-auto animate-fade-in">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 p-6 glass rounded-2xl border border-slate-700/50">
-                        <div className="flex items-center gap-4">
-                            <div className="p-4 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 shadow-[0_0_20px_rgba(234,179,8,0.1)] relative">
-                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>
-                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-                                <Trophy className="text-yellow-500" size={32}/>
-                            </div>
-                            <div>
-                                <h2 className="text-3xl font-bold text-white tracking-tight">Leaderboard Diário <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full uppercase ml-2 align-middle shadow-[0_0_10px_rgba(239,68,68,0.5)]">Ao Vivo</span></h2>
-                                <p className="text-slate-400 text-sm mt-1">Ranking atualizado em tempo real baseado no volume e retenção **exclusivos de hoje**.</p>
-                            </div>
+                <div className="max-w-7xl mx-auto animate-fade-in pb-12">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+                        <div>
+                            <h2 className="text-3xl font-bold text-white flex items-center gap-3"><Trophy className="text-yellow-500" /> Ranking</h2>
+                            <p className="text-slate-400 text-sm mt-1">Acompanhe desempenho diário, mensal e estatísticas de simulados em tempo real.</p>
+                        </div>
+                        <div className="inline-flex rounded-xl border border-slate-700 bg-slate-900/70 p-1 text-xs sm:text-sm">
+                            <button onClick={() => setActiveTab('daily')} className={`px-3 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'daily' ? 'bg-yellow-500/20 text-yellow-400' : 'text-slate-400 hover:text-yellow-300'}`}>Ranking Diário</button>
+                            <button onClick={() => setActiveTab('monthly')} className={`px-3 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'monthly' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:text-blue-300'}`}>Ranking Mensal</button>
+                            <button onClick={() => setActiveTab('simulados')} className={`px-3 py-2 rounded-lg font-semibold transition-colors ${activeTab === 'simulados' ? 'bg-purple-500/20 text-purple-400' : 'text-slate-400 hover:text-purple-300'}`}>Ranking de Simulados</button>
                         </div>
                     </div>
 
-                    <div className="glass rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50 hidden md:block overflow-x-auto">
-                        <table className="w-full text-left border-collapse min-w-[800px]">
-                            <thead className="bg-slate-900/90 text-slate-400 uppercase text-[10px] md:text-xs font-bold tracking-wider">
-                                <tr>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center w-16">Rank</th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800">Estudante</th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados apenas HOJE"><div className="flex items-center justify-center gap-1"><Layers size={14}/> Hoje (Cards)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Tempo estudado apenas HOJE"><div className="flex items-center justify-center gap-1"><Clock size={14}/> Hoje (Tempo)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Streak da sessão diária"><div className="flex items-center justify-center gap-1 text-orange-500"><Flame size={14}/> Streak</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Retenção exclusiva do dia de hoje"><div className="flex items-center justify-center gap-1"><Target size={14}/> Retenção (Diária)</div></th>
-                                    <th className="p-4 md:p-5 border-b border-slate-800 text-center" title="Cards revisados nos últimos 31 dias"><div className="flex items-center justify-center gap-1 text-slate-500"><TrendingUp size={14}/> Últ. 31 Dias (Volume)</div></th>
-                                    {isAdmin && <th className="p-4 md:p-5 border-b border-slate-800 text-center text-red-500">Admin</th>}
-                                </tr>
+                    <div className="overflow-x-auto rounded-2xl border border-slate-700/50 bg-slate-950/70">
+                        <table className="w-full text-sm text-left min-w-[900px]">
+                            <thead className="bg-slate-900/90 text-slate-400 text-xs uppercase tracking-wider">
+                                {activeTab === 'daily' && (
+                                    <tr>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center w-16">Rank</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800">Estudante</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Hoje (Cards)</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Hoje (Tempo)</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Streak</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Retenção (Diária)</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Últ. 31 Dias</th>
+                                        {isAdmin && <th className="p-4 md:p-5 border-b border-slate-800 text-center text-red-500">Admin</th>}
+                                    </tr>
+                                )}
+                                {activeTab === 'monthly' && (
+                                    <tr>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center w-16">Rank</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800">Nome</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Total de Cards (Mês)</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Tempo Total (Mês)</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Streaks Totais (Máx.)</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Retenção Máxima</th>
+                                        {isAdmin && <th className="p-4 md:p-5 border-b border-slate-800 text-center text-red-500">Admin</th>}
+                                    </tr>
+                                )}
+                                {activeTab === 'simulados' && (
+                                    <tr>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center w-16">Rank</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800">Nome</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Tempo Total de Prova</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Questões Vistas</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Acertos</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Vezes que Fez</th>
+                                        <th className="p-4 md:p-5 border-b border-slate-800 text-center">Aproveitamento</th>
+                                        {isAdmin && <th className="p-4 md:p-5 border-b border-slate-800 text-center text-red-500">Admin</th>}
+                                    </tr>
+                                )}
                             </thead>
-                            <tbody className="divide-y divide-slate-800/50 transition-all">
-                                {loading ? (
-                                    <tr><td colSpan={isAdmin ? "8" : "7"} className="p-8 text-center text-slate-500">Sincronizando dados ao vivo...</td></tr>
-                                ) : leaders.map((l, i) => (
-                                    <tr key={l.id} className={`transition-colors hover:bg-slate-800/40 ${i === 0 ? 'bg-yellow-500/5' : i === 1 ? 'bg-slate-400/5' : i === 2 ? 'bg-amber-700/5' : ''}`}>
-                                        <td className="p-4 md:p-5 text-center font-bold text-slate-500 font-mono text-lg">
-                                            {i === 0 ? <span className="text-yellow-500">1</span> : i === 1 ? <span className="text-slate-300">2</span> : i === 2 ? <span className="text-amber-600">3</span> : i+1}
-                                        </td>
-                                        <td className="p-4 md:p-5 text-white font-medium flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">
-                                                {l.email ? l.email.charAt(0).toUpperCase() : '?'}
-                                            </div>
-                                            {l.email ? l.email.split('@')[0] : 'Anônimo'}
-                                        </td>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {loading && <tr><td colSpan={isAdmin ? "8" : "7"} className="p-8 text-center text-slate-500">Sincronizando dados ao vivo...</td></tr>}
+
+                                {!loading && activeTab === 'daily' && sortedDaily.map((l, i) => (
+                                    <tr key={l.id} className="transition-colors hover:bg-slate-800/40">
+                                        <td className="p-4 md:p-5 text-center font-bold text-slate-400">{i + 1}</td>
+                                        <td className="p-4 md:p-5 text-white font-medium">{l.email ? l.email.split('@')[0] : 'Anônimo'}</td>
                                         <td className="p-4 md:p-5 text-center text-blue-400 font-mono font-bold">{l.cardsSeenToday.toLocaleString('pt-BR')}</td>
                                         <td className="p-4 md:p-5 text-center text-slate-300 font-mono text-sm">{formatDuration(l.timeStudiedToday)}</td>
-                                        <td className="p-4 md:p-5 text-center">
-                                            <span className={`inline-flex items-center gap-1 font-mono font-bold ${l.currentStreak >= 3 ? 'text-orange-500' : 'text-slate-500'}`}>
-                                                {l.currentStreak > 0 && <Flame size={12} className={l.currentStreak >= 3 ? 'animate-pulse' : ''}/>}
-                                                {l.currentStreak}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 md:p-5 text-center">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-bold border inline-block min-w-[60px] ${l.retention > 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : l.retention > 50 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                                                {l.retention ? l.retention.toFixed(1) : 0}%
-                                            </span>
-                                        </td>
+                                        <td className="p-4 md:p-5 text-center text-orange-400 font-bold">{l.currentStreak}</td>
+                                        <td className="p-4 md:p-5 text-center">{getRetentionBubble(l.retention)}</td>
                                         <td className="p-4 md:p-5 text-center text-slate-400 font-mono text-sm">{calculateLast31Days(l.dailyActivity).toLocaleString('pt-BR')}</td>
-
-                                        {isAdmin && (
-                                            <td className="p-4 md:p-5 text-center">
-                                                <button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500 p-2 rounded hover:bg-red-500/10 transition-colors" title="Deletar este usuário do ranking">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </td>
-                                        )}
+                                        {isAdmin && <td className="p-4 md:p-5 text-center"><button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500"><Trash2 size={16} /></button></td>}
                                     </tr>
                                 ))}
+
+                                {!loading && activeTab === 'monthly' && sortedMonthly.map((l, i) => (
+                                    <tr key={l.id} className="transition-colors hover:bg-slate-800/40">
+                                        <td className="p-4 md:p-5 text-center font-bold text-slate-400">{i + 1}</td>
+                                        <td className="p-4 md:p-5 text-white font-medium">{l.email ? l.email.split('@')[0] : 'Anônimo'}</td>
+                                        <td className="p-4 md:p-5 text-center text-blue-400 font-mono font-bold">{l.monthlyCards.toLocaleString('pt-BR')}</td>
+                                        <td className="p-4 md:p-5 text-center text-slate-300 font-mono text-sm">{formatDuration(l.monthlyTime)}</td>
+                                        <td className="p-4 md:p-5 text-center text-orange-400 font-bold">{l.maxStreak || l.currentStreak || 0}</td>
+                                        <td className="p-4 md:p-5 text-center">{getRetentionBubble(l.maxRetention || l.monthlyRetention || 0)}</td>
+                                        {isAdmin && <td className="p-4 md:p-5 text-center"><button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500"><Trash2 size={16} /></button></td>}
+                                    </tr>
+                                ))}
+
+                                {!loading && activeTab === 'simulados' && sortedQuizzes.map((l, i) => {
+                                    const questionsSeen = l.quizStats?.questionsSeen || 0;
+                                    const hits = l.quizStats?.correctAnswers || 0;
+                                    const accuracy = questionsSeen > 0 ? (hits / questionsSeen) * 100 : 0;
+                                    return (
+                                        <tr key={l.id} className="transition-colors hover:bg-slate-800/40">
+                                            <td className="p-4 md:p-5 text-center font-bold text-slate-400">{i + 1}</td>
+                                            <td className="p-4 md:p-5 text-white font-medium">{l.email ? l.email.split('@')[0] : 'Anônimo'}</td>
+                                            <td className="p-4 md:p-5 text-center text-slate-300 font-mono text-sm">{formatDuration(l.quizStats?.totalExamTime || 0)}</td>
+                                            <td className="p-4 md:p-5 text-center text-blue-400 font-mono font-bold">{questionsSeen.toLocaleString('pt-BR')}</td>
+                                            <td className="p-4 md:p-5 text-center text-emerald-400 font-mono font-bold">{hits.toLocaleString('pt-BR')}</td>
+                                            <td className="p-4 md:p-5 text-center text-purple-400 font-mono font-bold">{(l.quizStats?.examsTaken || 0).toLocaleString('pt-BR')}</td>
+                                            <td className="p-4 md:p-5 text-center">{getRetentionBubble(accuracy)}</td>
+                                            {isAdmin && <td className="p-4 md:p-5 text-center"><button onClick={() => handleDeleteUser(l.id, l.email)} className="text-slate-500 hover:text-red-500"><Trash2 size={16} /></button></td>}
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
-                    </div>
-
-                    <div className="md:hidden space-y-3">
-                        {loading ? (
-                            <div className="glass rounded-2xl border border-slate-700/50 p-6 text-center text-slate-500">Sincronizando dados ao vivo...</div>
-                        ) : leaders.map((l, i) => (
-                            <div key={l.id} className={`glass rounded-2xl border border-slate-700/50 p-4 ${i === 0 ? 'ring-1 ring-yellow-500/40' : i === 1 ? 'ring-1 ring-slate-300/30' : i === 2 ? 'ring-1 ring-amber-500/30' : ''}`}>
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-2 text-white font-semibold">
-                                        <span className="text-slate-400">#{i + 1}</span>
-                                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">
-                                            {l.email ? l.email.charAt(0).toUpperCase() : '?'}
-                                        </div>
-                                        <span className="truncate max-w-[140px]">{l.email ? l.email.split('@')[0] : 'Anônimo'}</span>
-                                    </div>
-                                    <span className={`inline-flex items-center gap-1 font-mono font-bold ${l.currentStreak >= 3 ? 'text-orange-500' : 'text-slate-500'}`}>
-                                        {l.currentStreak > 0 && <Flame size={12} className={l.currentStreak >= 3 ? 'animate-pulse' : ''}/>}
-                                        {l.currentStreak}
-                                    </span>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="bg-slate-900/70 rounded-lg p-2 border border-slate-800">
-                                        <div className="text-slate-500">Hoje (Cards)</div>
-                                        <div className="text-blue-400 font-mono font-bold text-sm">{l.cardsSeenToday.toLocaleString('pt-BR')}</div>
-                                    </div>
-                                    <div className="bg-slate-900/70 rounded-lg p-2 border border-slate-800">
-                                        <div className="text-slate-500">Hoje (Tempo)</div>
-                                        <div className="text-slate-300 font-mono text-sm">{formatDuration(l.timeStudiedToday)}</div>
-                                    </div>
-                                    <div className="bg-slate-900/70 rounded-lg p-2 border border-slate-800">
-                                        <div className="text-slate-500">Retenção</div>
-                                        <div className="text-sm font-bold text-emerald-400">{l.retention ? l.retention.toFixed(1) : 0}%</div>
-                                    </div>
-                                    <div className="bg-slate-900/70 rounded-lg p-2 border border-slate-800">
-                                        <div className="text-slate-500">Últ. 31 dias</div>
-                                        <div className="text-slate-400 font-mono text-sm">{calculateLast31Days(l.dailyActivity).toLocaleString('pt-BR')}</div>
-                                    </div>
-                                </div>
-
-                                {isAdmin && (
-                                    <button onClick={() => handleDeleteUser(l.id, l.email)} className="mt-3 w-full text-slate-500 hover:text-red-500 p-2 rounded-lg hover:bg-red-500/10 transition-colors border border-slate-800" title="Deletar este usuário do ranking">
-                                        <span className="inline-flex items-center gap-2 text-sm"><Trash2 size={14} /> Remover do ranking</span>
-                                    </button>
-                                )}
-                            </div>
-                        ))}
                     </div>
                 </div>
             );
         };
 
-        const AboutView = ({ content, isAdmin, onSave }) => {
-            const [isEditing, setIsEditing] = React.useState(false);
-            const [editContent, setEditContent] = React.useState(content);
-            const [isSaving, setIsSaving] = React.useState(false);
+        const POST_IT_COLORS = [
+            { id: 'sun', label: 'Sol', bg: 'bg-amber-200', border: 'border-amber-300', text: 'text-amber-950' },
+            { id: 'mint', label: 'Menta', bg: 'bg-emerald-200', border: 'border-emerald-300', text: 'text-emerald-950' },
+            { id: 'sky', label: 'Céu', bg: 'bg-sky-200', border: 'border-sky-300', text: 'text-sky-950' },
+            { id: 'violet', label: 'Violeta', bg: 'bg-violet-200', border: 'border-violet-300', text: 'text-violet-950' },
+            { id: 'rose', label: 'Rosa', bg: 'bg-rose-200', border: 'border-rose-300', text: 'text-rose-950' }
+        ];
+        const POST_IT_MAX_CHARS = 180;
 
-            React.useEffect(() => {
-                setEditContent(content);
-            }, [content]);
+        const PostItsView = ({ postIts, isAdmin, onCreatePostIt, onDeletePostIt, isPosting }) => {
+            const [noteText, setNoteText] = React.useState('');
+            const [selectedColor, setSelectedColor] = React.useState(POST_IT_COLORS[0].id);
 
-            const handleSave = async () => {
-                setIsSaving(true);
-                await onSave(editContent);
-                setIsSaving(false);
-                setIsEditing(false);
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                const trimmed = noteText.trim();
+                if (!trimmed) return;
+                await onCreatePostIt({ text: trimmed, color: selectedColor });
+                setNoteText('');
+                setSelectedColor(POST_IT_COLORS[0].id);
             };
 
-            const handleCancel = () => {
-                setEditContent(content);
-                setIsEditing(false);
+            const formatPostDate = (createdAt) => {
+                if (!createdAt?.toDate) return 'Agora mesmo';
+                return createdAt.toDate().toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
             };
 
             return (
-                <div className="max-w-4xl mx-auto animate-fade-in pb-12">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-                                <Info className="text-blue-500" size={32} />
-                                Sobre & Diretrizes
-                            </h2>
-                            <p className="text-slate-400 mt-2">Avisos, ementas da faculdade, regras do algoritmo e orientações gerais do site.</p>
-                        </div>
-                        {isAdmin && !isEditing && (
-                            <button
-                                onClick={() => setIsEditing(true)}
-                                className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 border border-slate-700"
-                            >
-                                <Pencil size={16} /> Editar Conteúdo
-                            </button>
-                        )}
+                <div className="max-w-6xl mx-auto animate-fade-in pb-12 space-y-6">
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 md:p-5">
+                        <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
+                            <StickyNote className="text-blue-400" size={30} /> Post-Its Colaborativos
+                        </h2>
+                        <p className="text-slate-300 mt-2 text-sm md:text-base">Use este mural para compartilhar dúvidas, macetes e analogias úteis de estudo. Todos os post-its devem estar relacionados às matérias e analogias de aprendizagem.</p>
                     </div>
 
-                    <div className="glass p-6 md:p-10 rounded-3xl border border-slate-700/50 shadow-2xl relative">
-                        {isEditing ? (
-                            <div className="flex flex-col gap-4 animate-fade-in">
-                                <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-lg flex items-center gap-2 text-sm text-blue-300">
-                                    <Info size={16} /> Você está editando o conteúdo público visível para todos os alunos.
-                                </div>
-                                <RichTextEditor value={editContent} onChange={setEditContent} minHeight="h-[500px]" />
-                                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
+                    <form onSubmit={handleSubmit} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-6 space-y-4">
+                        <div>
+                            <label className="text-sm font-semibold text-slate-200 block mb-2">Seu post-it (máximo de {POST_IT_MAX_CHARS} caracteres)</label>
+                            <textarea
+                                value={noteText}
+                                onChange={(e) => setNoteText(e.target.value.slice(0, POST_IT_MAX_CHARS))}
+                                placeholder="Ex.: Escalonamento de processos é como organizar fila no banco: prioridade evita gargalo."
+                                className="w-full min-h-[120px] resize-y bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 outline-none focus:border-blue-500"
+                            />
+                            <div className="text-right text-xs mt-1 text-slate-400">{noteText.length}/{POST_IT_MAX_CHARS}</div>
+                        </div>
+
+                        <div>
+                            <p className="text-sm font-semibold text-slate-200 mb-2">Cor do post-it</p>
+                            <div className="flex flex-wrap gap-2">
+                                {POST_IT_COLORS.map((color) => (
                                     <button
-                                        onClick={handleCancel}
-                                        disabled={isSaving}
-                                        className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2.5 rounded-xl font-bold transition-all"
+                                        key={color.id}
+                                        type="button"
+                                        onClick={() => setSelectedColor(color.id)}
+                                        className={`px-3 py-2 rounded-lg border text-xs font-bold transition-all ${color.bg} ${color.border} ${color.text} ${selectedColor === color.id ? 'ring-2 ring-white/70 scale-105' : 'opacity-90 hover:opacity-100'}`}
                                     >
-                                        Cancelar
+                                        {color.label}
                                     </button>
-                                    <button
-                                        onClick={handleSave}
-                                        disabled={isSaving}
-                                        className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-8 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-blue-900/20"
-                                    >
-                                        {isSaving ? <RotateCcw size={18} className="animate-spin" /> : <Save size={18} />}
-                                        Publicar Alterações
-                                    </button>
-                                </div>
+                                ))}
                             </div>
-                        ) : (
-                            <div className="animate-fade-in">
-                                {content && content.trim() !== '' ? (
-                                    <div
-                                        className="prose prose-invert prose-lg text-slate-300 max-w-none prose-left prose-a:text-blue-400 hover:prose-a:text-blue-300"
-                                        dangerouslySetInnerHTML={{ __html: content }}
-                                    />
-                                ) : (
-                                    <div className="text-center py-20 flex flex-col items-center justify-center">
-                                        <Info size={48} className="text-slate-700 mb-4" />
-                                        <h3 className="text-xl font-bold text-slate-300 mb-2">Nenhum conteúdo adicionado ainda.</h3>
-                                        {isAdmin ? (
-                                            <p className="text-slate-500">Clique no botão "Editar Conteúdo" no topo para preencher as informações.</p>
-                                        ) : (
-                                            <p className="text-slate-500">O administrador do sistema ainda não disponibilizou informações nesta página.</p>
-                                        )}
+                        </div>
+
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                disabled={isPosting || noteText.trim().length === 0}
+                                className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400 text-white px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2"
+                            >
+                                <Send size={16} /> {isPosting ? 'Publicando...' : 'Publicar Post-it'}
+                            </button>
+                        </div>
+                    </form>
+
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {postIts.map((post) => {
+                            const selected = POST_IT_COLORS.find((c) => c.id === post.color) || POST_IT_COLORS[0];
+                            const author = post.authorName || 'Anônimo';
+                            return (
+                                <article key={post.id} className={`${selected.bg} ${selected.border} border rounded-2xl p-4 shadow-lg shadow-slate-950/30 flex flex-col gap-3 min-h-[210px]`}>
+                                    <p className={`${selected.text} text-sm leading-relaxed whitespace-pre-wrap break-words flex-1`}>{post.text}</p>
+                                    <div className="border-t border-black/10 pt-2 text-xs text-black/70 space-y-1">
+                                        <p className="font-semibold">Autor: {author}</p>
+                                        <p>Publicado em: {formatPostDate(post.createdAt)}</p>
                                     </div>
-                                )}
-                            </div>
-                        )}
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => onDeletePostIt(post.id)}
+                                            className="self-end text-red-700 hover:text-red-800 text-xs font-bold flex items-center gap-1"
+                                        >
+                                            <Trash2 size={14} /> Excluir
+                                        </button>
+                                    )}
+                                </article>
+                            );
+                        })}
                     </div>
+
+                    {postIts.length === 0 && (
+                        <div className="text-center py-14 border border-dashed border-slate-700 rounded-2xl bg-slate-900/40">
+                            <StickyNote size={42} className="mx-auto text-slate-600 mb-3" />
+                            <p className="text-slate-300 font-semibold">Ainda não existem post-its no mural.</p>
+                            <p className="text-slate-500 text-sm mt-1">Seja o primeiro a compartilhar uma analogia ou dica de estudo.</p>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -1476,7 +1586,7 @@
 
             const [selectedCardIds, setSelectedCardIds] = React.useState(new Set());
 
-            const [bulkForm, setBulkForm] = React.useState({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] });
+            const [bulkForm, setBulkForm] = React.useState({ category: '', lesson: '', subcategory: '', prerequisiteTopic: '', tagsToAdd: [], tagsToRemove: [] });
             const [bulkTagAddInput, setBulkTagAddInput] = React.useState('');
             const [bulkTagRemoveInput, setBulkTagRemoveInput] = React.useState('');
             const [isBulkProcessing, setIsBulkProcessing] = React.useState(false);
@@ -1565,7 +1675,7 @@
                 e.preventDefault();
                 if (selectedCardIds.size === 0) return;
                 const idsArray = Array.from(selectedCardIds);
-                const hasChanges = bulkForm.category || bulkForm.lesson || bulkForm.subcategory || bulkForm.tagsToAdd.length > 0 || bulkForm.tagsToRemove.length > 0;
+                const hasChanges = bulkForm.category || bulkForm.lesson || bulkForm.subcategory || bulkForm.prerequisiteTopic || bulkForm.tagsToAdd.length > 0 || bulkForm.tagsToRemove.length > 0;
 
                 if (!hasChanges) { alert("Nenhuma modificação definida."); return; }
                 if (!confirm(`Modificar ${idsArray.length} flashcards?`)) return;
@@ -1585,6 +1695,7 @@
                         if (bulkForm.category.trim()) updateData.category = normalize(bulkForm.category);
                         if (bulkForm.lesson.trim()) updateData.lesson = normalize(bulkForm.lesson);
                         if (bulkForm.subcategory.trim()) updateData.subcategory = normalize(bulkForm.subcategory);
+                        if (bulkForm.prerequisiteTopic.trim()) updateData.prerequisiteTopic = normalize(bulkForm.prerequisiteTopic);
 
                         let currentTags = [...(card.tags || [])];
                         let tagsChanged = false;
@@ -1601,7 +1712,7 @@
                         }
                         if (tagsChanged) updateData.tags = currentTags;
                         if (Object.keys(updateData).length > 0) {
-                            batch.update(doc(db, "cards", cardId), updateData);
+                            batch.set(doc(db, "cards", cardId), updateData, { merge: true });
                             processedCount++;
                         }
                     });
@@ -1610,7 +1721,7 @@
                 }
                 setIsBulkProcessing(false);
                 setSelectedCardIds(new Set());
-                setBulkForm({ category: '', lesson: '', subcategory: '', tagsToAdd: [], tagsToRemove: [] });
+                setBulkForm({ category: '', lesson: '', subcategory: '', prerequisiteTopic: '', tagsToAdd: [], tagsToRemove: [] });
             };
 
             const handleAddTag = (e, isQuiz = false) => {
@@ -1766,8 +1877,8 @@
                 const category = normalize(raw.category || raw.subject || 'Geral') || 'Geral';
                 const lesson = normalize(raw.lesson || raw.unit || 'Conteúdo Geral') || 'Conteúdo Geral';
                 const subcategory = normalize(raw.subcategory || raw.topic || 'Geral') || 'Geral';
-                const front = String(raw.front || raw.question || '').trim();
-                const back = String(raw.back || raw.answer || '').trim();
+                const front = sanitizeCardText(raw.front || raw.question || '');
+                const back = sanitizeCardText(raw.back || raw.answer || '');
                 const orderRaw = raw.order ?? raw.position ?? idx;
                 const order = Number.isFinite(Number(orderRaw)) ? Number(orderRaw) : idx;
                 const prerequisiteTopic = normalize(raw.prerequisiteTopic || raw.prerequisitoTopico || raw.topicoPrerequisito || raw.requiredTopic || raw.prerequisite || raw.prerequisito || '');
@@ -2160,7 +2271,7 @@
                                                 <p>Deixe o campo vazio se não quiser alterar a propriedade. Preencher sobrescreverá todos selecionados.</p>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-shrink-0 border-b border-slate-800 pb-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-shrink-0 border-b border-slate-800 pb-4">
                                                 <div className="space-y-1">
                                                     <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Matéria para</label>
                                                     <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.category} onChange={e => setBulkForm(prev => ({...prev, category: e.target.value}))} list="category-suggestions" />
@@ -2172,6 +2283,10 @@
                                                 <div className="space-y-1">
                                                     <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Tópico para</label>
                                                     <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.subcategory} onChange={e => setBulkForm(prev => ({...prev, subcategory: e.target.value}))} list="subcategory-suggestions" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-bold text-amber-500 uppercase ml-1 block">Alterar Pré-requisito para</label>
+                                                    <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-amber-500 outline-none font-mono text-sm placeholder:text-slate-600" placeholder="Manter atual" value={bulkForm.prerequisiteTopic} onChange={e => setBulkForm(prev => ({...prev, prerequisiteTopic: e.target.value}))} list="subcategory-suggestions" />
                                                 </div>
                                             </div>
 
@@ -2392,6 +2507,7 @@
         };
 
         const QuizSession = ({ queue, onFinish }) => {
+            const [sessionStartTime] = React.useState(Date.now());
             const [index, setIndex] = React.useState(0);
             const [selectedOption, setSelectedOption] = React.useState(null);
             const [showExplanation, setShowExplanation] = React.useState(false);
@@ -2418,7 +2534,7 @@
                             </div>
                         </div>
 
-                        <button onClick={onFinish} className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20">Finalizar e Voltar</button>
+                        <button onClick={() => onFinish({ score, totalQuestions: queue.length, totalTimeMs: Date.now() - sessionStartTime })} className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20">Finalizar e Voltar</button>
                     </div>
                 );
             }
@@ -2471,7 +2587,7 @@
                     <div className="glass flex-1 rounded-3xl border border-slate-700 p-6 md:p-10 flex flex-col shadow-2xl bg-slate-900">
 
                         <div className="mb-8 w-full">
-                            <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center flex flex-col items-center justify-center" dangerouslySetInnerHTML={{__html: currentQuestion.question || currentQuestion.text}}></div>
+                            <div className="prose prose-invert prose-lg font-medium text-white select-text w-full max-w-none leading-relaxed break-words text-center" dangerouslySetInnerHTML={{__html: currentQuestion.question || currentQuestion.text}}></div>
                         </div>
 
                         <div className="space-y-3 mt-auto">
@@ -2525,7 +2641,8 @@
             const [userStats, setUserStats] = React.useState(null);
 
             const [siteSettings, setSiteSettings] = React.useState({ title: '', favicon: '' });
-            const [aboutContent, setAboutContent] = React.useState("");
+            const [postIts, setPostIts] = React.useState([]);
+            const [isPostingPostIt, setIsPostingPostIt] = React.useState(false);
 
             const [studyQueue, setStudyQueue] = React.useState([]);
             const [quizQueue, setQuizQueue] = React.useState([]);
@@ -2586,15 +2703,7 @@
                     }
                 }, (error) => console.error("Erro site_config onSnapshot:", error));
 
-                const unsubAbout = onSnapshot(doc(db, "site_config", "about"), (docSnap) => {
-                    if (docSnap.exists()) {
-                        setAboutContent(docSnap.data().content || "");
-                    } else {
-                        setAboutContent("");
-                    }
-                }, (error) => console.error("Erro about config onSnapshot:", error));
-
-                return () => { unsubSettings(); unsubAbout(); };
+                return () => { unsubSettings(); };
             }, [user]);
 
             React.useEffect(() => {
@@ -2638,17 +2747,21 @@
                 const statsRef = doc(db, 'leaderboard', user.uid);
                 const unsubStats = onSnapshot(statsRef, async (docSnap) => {
                     if (!docSnap.exists()) {
-                        const defaultStats = {
-                            email: user.email || 'Anônimo', cardsSeen: 0, correctAnswers: 0, retention: 0, timeStudied: 0, currentStreak: 0,
-                            dailyActivity: {}, dailyTime: {}, algorithm: 'fsrs', fsrsRetention: 0.90, learningProfile: 'standard'
-                        };
+                        const defaultStats = buildDefaultUserStats(user.email || 'Anônimo');
+                        setUserStats(defaultStats);
                         await setDoc(statsRef, { ...defaultStats, lastActive: serverTimestamp() });
                     } else {
                         setUserStats(docSnap.data());
                     }
                 }, (error) => console.error("Erro stats onSnapshot:", error));
 
-                return () => { unsubCards(); unsubQuizzes(); unsubReviews(); unsubStats(); };
+                const qPostIts = query(collection(db, "post_its"), orderBy("createdAt", "desc"));
+                const unsubPostIts = onSnapshot(qPostIts, (snapshot) => {
+                    const loadedPostIts = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+                    setPostIts(loadedPostIts);
+                }, (error) => console.error("Erro post_its onSnapshot:", error));
+
+                return () => { unsubCards(); unsubQuizzes(); unsubReviews(); unsubStats(); unsubPostIts(); };
             }, [user]);
 
             const getDecksStructure = () => {
@@ -2772,11 +2885,66 @@
                 setView("quiz_session");
             };
 
-            const handleSaveAboutContent = async (newContent) => {
+            const handleQuizSessionFinish = async ({ score = 0, totalQuestions = 0, totalTimeMs = 0 } = {}) => {
+                if (user) {
+                    const safeQuestions = Math.max(totalQuestions, 0);
+                    const safeScore = Math.max(score, 0);
+                    const safeTime = Math.max(totalTimeMs, 0);
+
+                    const baseStats = userStats ? { ...userStats } : buildDefaultUserStats(user.email || 'Anônimo');
+                    const currentQuizStats = baseStats.quizStats || { totalExamTime: 0, questionsSeen: 0, correctAnswers: 0, examsTaken: 0 };
+                    const updatedStats = {
+                        ...baseStats,
+                        email: user.email || baseStats.email || 'Anônimo',
+                        quizStats: {
+                            totalExamTime: (currentQuizStats.totalExamTime || 0) + safeTime,
+                            questionsSeen: (currentQuizStats.questionsSeen || 0) + safeQuestions,
+                            correctAnswers: (currentQuizStats.correctAnswers || 0) + safeScore,
+                            examsTaken: (currentQuizStats.examsTaken || 0) + 1
+                        }
+                    };
+                    setUserStats(updatedStats);
+
+                    try {
+                        const statsRef = doc(db, 'leaderboard', user.uid);
+                        await setDoc(statsRef, { ...updatedStats, lastActive: serverTimestamp() }, { merge: true });
+                    } catch (e) {
+                        console.error("Erro ao salvar stats de simulado:", e);
+                    }
+                }
+
+                setView("quizzes");
+            };
+
+            const handleCreatePostIt = async ({ text, color }) => {
+                if (!user) return;
+                const normalizedText = text.trim().slice(0, POST_IT_MAX_CHARS);
+                if (!normalizedText) return;
+
                 try {
-                    await setDoc(doc(db, "site_config", "about"), { content: newContent }, { merge: true });
+                    setIsPostingPostIt(true);
+                    const authorName = user.email ? user.email.split('@')[0] : 'Anônimo';
+                    await addDoc(collection(db, "post_its"), {
+                        text: normalizedText,
+                        color,
+                        authorName,
+                        authorEmail: user.email || null,
+                        userId: user.uid,
+                        createdAt: serverTimestamp()
+                    });
                 } catch (err) {
-                    alert("Erro ao salvar a página Sobre: " + err.message);
+                    alert("Erro ao publicar post-it: " + err.message);
+                } finally {
+                    setIsPostingPostIt(false);
+                }
+            };
+
+            const handleDeletePostIt = async (postId) => {
+                if (!isAdmin) return;
+                try {
+                    await deleteDoc(doc(db, "post_its", postId));
+                } catch (err) {
+                    alert("Erro ao excluir post-it: " + err.message);
                 }
             };
 
@@ -2833,9 +3001,9 @@
                                     </button>
                                 )}
 
-                                {user && <button onClick={() => setView("leaderboard")} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium px-2.5 sm:px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${view === 'leaderboard' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'text-slate-400 bg-slate-900 border-slate-800 hover:text-yellow-400 hover:bg-slate-800'}`}><Trophy size={14} /> <span className="hidden sm:inline">Ranking Diário</span><span className="sm:hidden">Ranking</span></button>}
+                                {user && <button onClick={() => setView("leaderboard")} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium px-2.5 sm:px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${view === 'leaderboard' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50' : 'text-slate-400 bg-slate-900 border-slate-800 hover:text-yellow-400 hover:bg-slate-800'}`}><Trophy size={14} /> <span className="hidden sm:inline">Ranking</span><span className="sm:hidden">Ranking</span></button>}
 
-                                <button onClick={() => setView("about")} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium px-2.5 sm:px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${view === 'about' ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'text-slate-400 bg-slate-900 border-slate-800 hover:text-blue-400 hover:bg-slate-800'}`}><Info size={14} /> Sobre</button>
+                                <button onClick={() => setView("postits")} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium px-2.5 sm:px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${view === 'postits' ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'text-slate-400 bg-slate-900 border-slate-800 hover:text-blue-400 hover:bg-slate-800'}`}><StickyNote size={14} /> Post-Its</button>
 
                                 {isAdmin && <button onClick={() => setView("admin")} className="text-amber-500 hover:text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/20 transition-all flex items-center gap-1.5 text-sm"><Lock size={14} /> Admin</button>}
                                 {user && <button onClick={() => setSettingsOpen(true)} className="text-slate-400 hover:text-white transition-colors p-2 rounded-full hover:bg-slate-800" title="Configurações (Engine)"><Settings size={20}/></button>}
@@ -2871,11 +3039,11 @@
 
                         {view === "quizzes" && <QuizDashboard quizzes={quizzes} onStartQuiz={handleStartQuiz} />}
 
-                        {view === "quiz_session" && <QuizSession queue={quizQueue} onFinish={() => setView("quizzes")} />}
+                        {view === "quiz_session" && <QuizSession queue={quizQueue} onFinish={handleQuizSessionFinish} />}
 
                         {view === "leaderboard" && <LeaderboardView isAdmin={isAdmin} />}
 
-                        {view === "about" && <AboutView content={aboutContent} isAdmin={isAdmin} onSave={handleSaveAboutContent} />}
+                        {view === "postits" && <PostItsView postIts={postIts} isAdmin={isAdmin} onCreatePostIt={handleCreatePostIt} onDeletePostIt={handleDeletePostIt} isPosting={isPostingPostIt} />}
 
                         {view === "admin" && isAdmin && <AdminPanel cards={cards} quizzes={quizzes} onExit={() => setView("decks")} siteSettings={siteSettings} />}
                     </main>
