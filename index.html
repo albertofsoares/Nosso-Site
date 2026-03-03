@@ -212,6 +212,8 @@
             retention: 0,
             timeStudied: 0,
             currentStreak: 0,
+            streakLockTarget: 0,
+            streakRecoveryCount: 0,
             maxStreak: 0,
             maxRetention: 0,
             quizStats: { totalExamTime: 0, questionsSeen: 0, correctAnswers: 0, examsTaken: 0 },
@@ -967,11 +969,32 @@
                     updatedStats.timeStudied = (updatedStats.timeStudied || 0) + timeSpent;
                     updatedStats.cardsSeen = (updatedStats.cardsSeen || 0) + 1;
 
+                    const previousStreak = updatedStats.currentStreak || 0;
+                    const lockTarget = updatedStats.streakLockTarget || 0;
+                    const recoveryCount = updatedStats.streakRecoveryCount || 0;
+                    const isLocked = lockTarget > 0;
+
                     if (isCorrect) {
                         updatedStats.correctAnswers = (updatedStats.correctAnswers || 0) + 1;
-                        updatedStats.currentStreak = (updatedStats.currentStreak || 0) + 1;
-                    } else {
-                        updatedStats.currentStreak = 0;
+
+                        if (isLocked) {
+                            const nextRecoveryCount = recoveryCount + 1;
+                            updatedStats.streakRecoveryCount = nextRecoveryCount;
+
+                            if (nextRecoveryCount > lockTarget) {
+                                updatedStats.currentStreak = nextRecoveryCount;
+                                updatedStats.streakLockTarget = 0;
+                                updatedStats.streakRecoveryCount = 0;
+                            } else {
+                                updatedStats.currentStreak = lockTarget;
+                            }
+                        } else {
+                            updatedStats.currentStreak = previousStreak + 1;
+                        }
+                    } else if (previousStreak > 0 || isLocked) {
+                        updatedStats.currentStreak = Math.max(previousStreak, lockTarget);
+                        updatedStats.streakLockTarget = Math.max(previousStreak, lockTarget);
+                        updatedStats.streakRecoveryCount = 0;
                     }
 
                     const milestone = getStreakMilestone(updatedStats.currentStreak || 0);
